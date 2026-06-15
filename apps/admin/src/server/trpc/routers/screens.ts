@@ -42,10 +42,16 @@ export const screensRouter = router({
         },
       });
 
-      await ctx.publicDb.pairingCode.update({
-        where: { code: input.code },
+      // Atomic claim: updateMany checks orgSlug is still null to prevent TOCTOU race
+      const claimed = await ctx.publicDb.pairingCode.updateMany({
+        where: { code: input.code, orgSlug: null },
         data: { orgSlug: ctx.orgSlug, screenId: screen.id },
       });
+
+      if (claimed.count === 0) {
+        await ctx.db.screen.delete({ where: { id: screen.id } });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Pairing code already used' });
+      }
 
       return screen;
     }),

@@ -15,6 +15,10 @@ export async function POST(req: NextRequest) {
   if (!isSafeOrgSlug(body.orgSlug) || !isSafeId(body.screenId)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
+  // ~2 MB base64 ≈ 1.5 MB decoded image
+  if (body.imageBase64.length > 2 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Snapshot too large' }, { status: 413 });
+  }
 
   const buffer = Buffer.from(body.imageBase64, 'base64');
   const key = `snapshots/${body.orgSlug}/${body.screenId}.png`;

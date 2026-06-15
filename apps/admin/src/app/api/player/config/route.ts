@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import type { PlayerConfig } from '@signflow/types';
-import { verifyPlayerToken } from '@/lib/player-auth';
+import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 export async function GET(req: NextRequest) {
   const screenId = req.nextUrl.searchParams.get('screenId');
   const orgSlug = req.nextUrl.searchParams.get('orgSlug');
   if (!screenId || !orgSlug) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+  }
+  if (!isSafeOrgSlug(orgSlug) || !isSafeId(screenId)) {
+    return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
   if (!verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

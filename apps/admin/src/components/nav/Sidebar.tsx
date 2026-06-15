@@ -3,12 +3,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Monitor, Image, ListVideo, Calendar, AlertTriangle,
-  BarChart2, LogOut,
+  BarChart2, LayoutDashboard, LogOut,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 
 const nav = [
-  { href: '/dashboard', label: 'Overview', icon: BarChart2 },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/screens', label: 'Screens', icon: Monitor },
   { href: '/dashboard/content', label: 'Content', icon: Image },
   { href: '/dashboard/playlists', label: 'Playlists', icon: ListVideo },
@@ -28,7 +28,7 @@ export function Sidebar() {
             key={href}
             href={href}
             className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-              pathname === href
+              pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'))
                 ? 'bg-gray-800 text-white'
                 : 'text-gray-400 hover:bg-gray-800 hover:text-white'
             }`}

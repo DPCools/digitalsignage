@@ -2,8 +2,13 @@ import { z } from 'zod';
 import { router, tenantProcedure, adminProcedure } from '../init';
 import { TRPCError } from '@trpc/server';
 import {
-  ALLOWED_MIMES, MIME_TO_CONTENT_TYPE, getMaxSize, getPresignedUploadUrl, getPublicUrl
+  ALLOWED_MIMES, MIME_TO_CONTENT_TYPE, getMaxSize, getPresignedUploadUrl, getPublicUrl, getMinio
 } from '@/lib/minio';
+
+function extractMinioKey(url: string): string | null {
+  const base = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/`;
+  return url.startsWith(base) ? decodeURIComponent(url.slice(base.length)) : null;
+}
 
 export const contentRouter = router({
   list: tenantProcedure
@@ -14,10 +19,13 @@ export const contentRouter = router({
       limit: z.number().min(1).max(50).default(20),
     }))
     .query(async ({ ctx, input }) => {
+      const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(ctx.session.user.role);
+      // Non-admins always see only APPROVED items regardless of filter
+      const statusFilter = input.status && isAdmin ? input.status : 'APPROVED';
       const items = await ctx.db.contentItem.findMany({
         where: {
           type: input.type,
-          status: input.status ?? (process.env.CONTENT_APPROVAL_REQUIRED === 'true' ? 'APPROVED' : undefined),
+          status: statusFilter,
         },
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
@@ -99,7 +107,17 @@ export const contentRouter = router({
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.contentItem.delete({ where: { id: input.id } })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.contentItem.findUnique({ where: { id: input.id } });
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+      await ctx.db.contentItem.delete({ where: { id: input.id } });
+      // Best-effort object cleanup — don't fail if object already gone
+      try {
+        const key = extractMinioKey(item.url);
+        if (key) await getMinio().removeObject(process.env.MINIO_BUCKET!, key);
+      } catch {
+        // Log silently — DB row is already deleted, orphaned object is preferable to a 500
+      }
+      return { ok: true };
+    }),
 });
