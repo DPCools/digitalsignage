@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { publicClient } from '@signflow/db';
 import { nanoid } from 'nanoid';
+import { generatePlayerToken } from '@/lib/player-auth';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     screenId: pairing.screenId,
     orgSlug: pairing.orgSlug,
-    token: Buffer.from(`${pairing.screenId}:${pairing.orgSlug}`).toString('base64'),
+    token: generatePlayerToken(pairing.screenId, pairing.orgSlug),
   });
 }
 
