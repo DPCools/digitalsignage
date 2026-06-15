@@ -1,0 +1,20 @@
+{
+  "name": "@signflow/db",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "db:generate": "prisma generate --schema ./prisma/public.prisma && prisma generate --schema ./prisma/tenant.prisma",
+    "db:migrate:public": "prisma migrate deploy --schema ./prisma/public.prisma",
+    "db:migrate:public:dev": "prisma migrate dev --schema ./prisma/public.prisma",
+    "db:seed": "tsx ./prisma/seed.ts"
+  },
+  "exports": { ".": "./src/index.ts" },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}
