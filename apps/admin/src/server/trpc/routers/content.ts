@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, tenantProcedure, adminProcedure } from '../init';
 import { TRPCError } from '@trpc/server';
 import {
-  ALLOWED_MIMES, getMaxSize, getPresignedUploadUrl, getPublicUrl
+  ALLOWED_MIMES, MIME_TO_CONTENT_TYPE, getMaxSize, getPresignedUploadUrl, getPublicUrl
 } from '@/lib/minio';
 
 export const contentRouter = router({
@@ -36,23 +36,39 @@ export const contentRouter = router({
       if (input.size > getMaxSize(input.mimeType)) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File too large' });
       }
-      return getPresignedUploadUrl(ctx.orgSlug, input.filename, input.mimeType);
+      return getPresignedUploadUrl(ctx.orgSlug!, input.mimeType);
     }),
 
   confirmUpload: tenantProcedure
     .input(z.object({
-      name: z.string(),
+      name: z.string().max(256),
       key: z.string(),
       mimeType: z.string(),
-      fileSize: z.number(),
-      type: z.enum(['IMAGE', 'VIDEO', 'HTML_TEMPLATE', 'RSS_FEED', 'PDF']),
+      fileSize: z.number().int().positive(),
       duration: z.number().optional(),
     }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.contentItem.create({
+    .mutation(async ({ ctx, input }) => {
+      // Validate key is scoped to this org and contains no path traversal
+      const expectedPrefix = `uploads/${ctx.orgSlug}/`;
+      if (!input.key.startsWith(expectedPrefix) || input.key.includes('..')) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid upload key' });
+      }
+      // Re-validate MIME and size — never trust client values from confirmUpload alone
+      if (!ALLOWED_MIMES.includes(input.mimeType)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File type not allowed' });
+      }
+      if (input.fileSize > getMaxSize(input.mimeType)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File too large' });
+      }
+      // Derive content type from validated MIME — don't accept client-supplied type enum
+      const type = MIME_TO_CONTENT_TYPE[input.mimeType];
+      if (!type) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot determine content type from MIME' });
+      }
+      return ctx.db.contentItem.create({
         data: {
           name: input.name,
-          type: input.type,
+          type,
           url: getPublicUrl(input.key),
           mimeType: input.mimeType,
           fileSize: input.fileSize,
@@ -60,8 +76,8 @@ export const contentRouter = router({
           uploadedBy: ctx.session.user.id,
           status: process.env.CONTENT_APPROVAL_REQUIRED === 'true' ? 'PENDING' : 'APPROVED',
         },
-      })
-    ),
+      });
+    }),
 
   approve: adminProcedure
     .input(z.object({ id: z.string() }))
