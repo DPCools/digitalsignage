@@ -1,5 +1,89 @@
-import { router, adminProcedure } from '../init';
+import { z } from 'zod';
+import { router, tenantProcedure, adminProcedure } from '../init';
+import { TRPCError } from '@trpc/server';
+import {
+  ALLOWED_MIMES, getMaxSize, getPresignedUploadUrl, getPublicUrl
+} from '@/lib/minio';
 
 export const contentRouter = router({
-  _placeholder: adminProcedure.query(() => null),
+  list: tenantProcedure
+    .input(z.object({
+      type: z.enum(['IMAGE', 'VIDEO', 'HTML_TEMPLATE', 'RSS_FEED', 'PDF']).optional(),
+      status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional(),
+      cursor: z.string().optional(),
+      limit: z.number().min(1).max(50).default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      const items = await ctx.db.contentItem.findMany({
+        where: {
+          type: input.type,
+          status: input.status ?? (process.env.CONTENT_APPROVAL_REQUIRED === 'true' ? 'APPROVED' : undefined),
+        },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        orderBy: { createdAt: 'desc' },
+      });
+      const hasMore = items.length > input.limit;
+      return { items: items.slice(0, input.limit), nextCursor: hasMore ? items[input.limit - 1].id : null };
+    }),
+
+  getUploadUrl: tenantProcedure
+    .input(z.object({ filename: z.string(), mimeType: z.string(), size: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ALLOWED_MIMES.includes(input.mimeType)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File type not allowed' });
+      }
+      if (input.size > getMaxSize(input.mimeType)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File too large' });
+      }
+      return getPresignedUploadUrl(ctx.orgSlug, input.filename, input.mimeType);
+    }),
+
+  confirmUpload: tenantProcedure
+    .input(z.object({
+      name: z.string(),
+      key: z.string(),
+      mimeType: z.string(),
+      fileSize: z.number(),
+      type: z.enum(['IMAGE', 'VIDEO', 'HTML_TEMPLATE', 'RSS_FEED', 'PDF']),
+      duration: z.number().optional(),
+    }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.contentItem.create({
+        data: {
+          name: input.name,
+          type: input.type,
+          url: getPublicUrl(input.key),
+          mimeType: input.mimeType,
+          fileSize: input.fileSize,
+          duration: input.duration,
+          uploadedBy: ctx.session.user.id,
+          status: process.env.CONTENT_APPROVAL_REQUIRED === 'true' ? 'PENDING' : 'APPROVED',
+        },
+      })
+    ),
+
+  approve: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.contentItem.update({
+        where: { id: input.id },
+        data: { status: 'APPROVED', approvedBy: ctx.session.user.id },
+      })
+    ),
+
+  reject: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.contentItem.update({
+        where: { id: input.id },
+        data: { status: 'REJECTED', approvedBy: ctx.session.user.id },
+      })
+    ),
+
+  delete: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.contentItem.delete({ where: { id: input.id } })
+    ),
 });
