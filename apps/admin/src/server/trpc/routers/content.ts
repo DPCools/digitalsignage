@@ -24,7 +24,7 @@ export const contentRouter = router({
         orderBy: { createdAt: 'desc' },
       });
       const hasMore = items.length > input.limit;
-      return { items: items.slice(0, input.limit), nextCursor: hasMore ? items[input.limit - 1].id : null };
+      return { items: items.slice(0, input.limit), nextCursor: hasMore ? items[input.limit].id : null };
     }),
 
   getUploadUrl: tenantProcedure
