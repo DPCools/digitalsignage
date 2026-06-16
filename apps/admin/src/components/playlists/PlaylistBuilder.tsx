@@ -25,7 +25,7 @@ function SortableItem({ item, onRemove, onUpdate }: {
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-900 p-3">
-      <button {...attributes} {...listeners} className="text-gray-600 hover:text-gray-400 cursor-grab">
+      <button {...attributes} {...listeners} aria-label="Drag to reorder" className="text-gray-600 hover:text-gray-400 cursor-grab">
         <GripVertical className="h-4 w-4" />
       </button>
       {item.contentItem.thumbnailUrl && (
@@ -39,7 +39,7 @@ function SortableItem({ item, onRemove, onUpdate }: {
       <input
         type="number"
         value={item.duration}
-        onChange={(e) => onUpdate(item.id, 'duration', parseInt(e.target.value))}
+        onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) onUpdate(item.id, 'duration', v); }}
         className="w-16 rounded bg-gray-800 border border-gray-700 px-2 py-1 text-xs text-white text-center"
         min={1}
       />
@@ -53,7 +53,7 @@ function SortableItem({ item, onRemove, onUpdate }: {
           <option key={z} value={z}>{z}</option>
         ))}
       </select>
-      <button onClick={() => onRemove(item.id)} className="text-gray-600 hover:text-red-400">
+      <button onClick={() => onRemove(item.id)} aria-label="Remove item" className="text-gray-600 hover:text-red-400">
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -70,7 +70,7 @@ export function PlaylistBuilder({ playlist, allContent }: {
     onSuccess: (_, vars) => setItems((prev) => prev.filter((i) => i.id !== vars.id)),
   });
   const addItem = trpc.playlists.addItem.useMutation({
-    onSuccess: (item) => setItems((prev) => [...prev, item as unknown as PlaylistItemRow]),
+    onSuccess: (item) => setItems((prev) => [...prev, item as PlaylistItemRow]),
   });
   const updateItem = trpc.playlists.updateItem.useMutation();
 
@@ -79,9 +79,13 @@ export function PlaylistBuilder({ playlist, allContent }: {
     if (!over || active.id === over.id) return;
     const oldIdx = items.findIndex((i) => i.id === active.id);
     const newIdx = items.findIndex((i) => i.id === over.id);
+    const previous = items;
     const reordered = arrayMove(items, oldIdx, newIdx);
     setItems(reordered);
-    reorder.mutate({ playlistId: playlist.id, itemIds: reordered.map((i) => i.id) });
+    reorder.mutate(
+      { playlistId: playlist.id, itemIds: reordered.map((i) => i.id) },
+      { onError: () => setItems(previous) },
+    );
   }
 
   function handleUpdate(id: string, field: string, value: unknown) {
@@ -99,7 +103,8 @@ export function PlaylistBuilder({ playlist, allContent }: {
             <button
               key={c.id}
               onClick={() => addItem.mutate({ playlistId: playlist.id, contentItemId: c.id })}
-              className="w-full text-left flex items-center gap-2 rounded-lg p-2 hover:bg-gray-800 text-sm"
+              disabled={addItem.isPending}
+              className="w-full text-left flex items-center gap-2 rounded-lg p-2 hover:bg-gray-800 text-sm disabled:opacity-50"
             >
               {c.thumbnailUrl && (
                 // eslint-disable-next-line @next/next/no-img-element

@@ -1,14 +1,16 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Monitor } from 'lucide-react';
 
 export function RegisterScreenModal() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const register = trpc.screens.register.useMutation({
-    onSuccess: () => { setOpen(false); setCode(''); setName(''); window.location.reload(); },
+    onSuccess: () => { setOpen(false); setCode(''); setName(''); router.refresh(); },
   });
 
   return (

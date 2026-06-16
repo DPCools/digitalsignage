@@ -54,7 +54,7 @@ export const playlistsRouter = router({
           _max: { position: true },
         });
         const position = (agg._max.position ?? -1) + 1;
-        return tx.playlistItem.create({ data: { ...input, position } });
+        return tx.playlistItem.create({ data: { ...input, position }, include: { contentItem: true } });
       });
     }),
 

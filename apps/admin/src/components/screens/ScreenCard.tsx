@@ -14,12 +14,15 @@ interface Props {
 }
 
 export function ScreenCard({ screen }: Props) {
-  const lastSeen = screen.lastHeartbeat
-    ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-        Math.round((screen.lastHeartbeat.getTime() - Date.now()) / 60000),
-        'minute'
-      )
-    : 'Never';
+  function formatLastSeen(date: Date): string {
+    const diffMs = Date.now() - date.getTime();
+    const diffSec = Math.round(diffMs / 1000);
+    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    if (diffSec < 30) return 'just now';
+    if (diffSec < 3600) return rtf.format(-Math.round(diffSec / 60), 'minute');
+    return rtf.format(-Math.round(diffSec / 3600), 'hour');
+  }
+  const lastSeen = screen.lastHeartbeat ? formatLastSeen(screen.lastHeartbeat) : 'Never';
 
   return (
     <Link

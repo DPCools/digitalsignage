@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { auth } from '@/server/auth';
 import { getTenantClient } from '@signflow/db';
 import { ScreenCard } from '@/components/screens/ScreenCard';
@@ -5,7 +6,8 @@ import { RegisterScreenModal } from '@/components/screens/RegisterScreenModal';
 
 export default async function ScreensPage() {
   const session = await auth();
-  const db = getTenantClient(session!.user.orgSlug);
+  if (!session) redirect('/login');
+  const db = getTenantClient(session.user.orgSlug);
   const screens = await db.screen.findMany({
     include: { group: true },
     orderBy: { createdAt: 'desc' },
