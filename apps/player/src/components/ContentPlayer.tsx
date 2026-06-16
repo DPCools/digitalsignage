@@ -48,11 +48,13 @@ export function ContentPlayer({ item }: { item: PlaylistItemConfig }) {
       );
 
     case 'HTML_TEMPLATE':
+      // allow-scripts only — omitting allow-same-origin forces opaque origin,
+      // preventing the frame from escaping the sandbox and accessing parent state
       return (
         <iframe
           src={src}
           className="w-full h-full border-0"
-          sandbox="allow-same-origin allow-scripts"
+          sandbox="allow-scripts"
           title="content"
         />
       );
@@ -60,8 +62,9 @@ export function ContentPlayer({ item }: { item: PlaylistItemConfig }) {
     case 'PDF':
       return (
         <iframe
-          src={`${src}#toolbar=0&navpanes=0&scrollbar=0`}
+          src={`${item.url}#toolbar=0&navpanes=0&scrollbar=0`}
           className="w-full h-full border-0"
+          sandbox="allow-same-origin"
           title="PDF"
         />
       );

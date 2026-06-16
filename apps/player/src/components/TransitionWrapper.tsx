@@ -27,10 +27,11 @@ export function TransitionWrapper({
     prevKey.current = itemKey;
     const { out, in: inCls } = TRANSITION_CLASSES[transitionType];
     setCls(out);
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setCls(inCls));
+    let innerRaf = 0;
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => setCls(inCls));
     });
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(outerRaf); cancelAnimationFrame(innerRaf); };
   }, [itemKey, transitionType]);
 
   return <div className={`w-full h-full ${cls}`}>{children}</div>;

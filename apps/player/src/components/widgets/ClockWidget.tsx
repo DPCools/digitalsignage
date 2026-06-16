@@ -2,16 +2,17 @@
 import { useEffect, useState } from 'react';
 
 export function ClockWidget() {
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState(new Date());
   useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString());
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    const interval = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(interval);
   }, []);
+
   return (
-    <div className="flex items-center justify-center h-full text-white text-xl font-mono">
-      {time}
+    <div className="flex items-center justify-center h-full bg-black/60 px-4">
+      <span className="text-white text-lg font-mono tabular-nums">
+        {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </span>
     </div>
   );
 }

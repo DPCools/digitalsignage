@@ -13,6 +13,7 @@ export default function PairPage() {
   const createCode = useCallback(async () => {
     try {
       const res = await fetch(`${BASE}/api/player/pair`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
       setCode(data.code);
     } catch {
@@ -33,8 +34,14 @@ export default function PairPage() {
           await setConfig({ screenId: data.screenId, orgSlug: data.orgSlug, token: data.token });
           clearInterval(interval);
           router.replace(`/play/${data.screenId}`);
+        } else if (res.status === 404 || res.status === 410) {
+          // Code expired or invalid — regenerate
+          clearInterval(interval);
+          setCode(null);
+          setError('Pairing code expired. Generating a new one…');
+          createCode();
         }
-      } catch { /* ignore network errors during polling */ }
+      } catch { /* ignore transient network errors during polling */ }
     }, 3000);
     return () => clearInterval(interval);
   }, [code, router]);
