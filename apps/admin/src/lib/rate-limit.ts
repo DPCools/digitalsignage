@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { randomUUID } from 'crypto';
 
 const redis = new Redis(process.env.REDIS_URL!);
 redis.on('error', (err) => console.error('[rate-limit] Redis error:', err));
@@ -12,13 +13,22 @@ export async function rateLimit(
   const windowStart = now - windowSec * 1000;
   const redisKey = `rl:${key}`;
 
-  const pipeline = redis.pipeline();
-  pipeline.zremrangebyscore(redisKey, '-inf', windowStart);
-  pipeline.zadd(redisKey, now, `${now}-${Math.random()}`);
-  pipeline.zcard(redisKey);
-  pipeline.expire(redisKey, windowSec + 1);
-  const results = await pipeline.exec();
+  // Check current count without recording
+  const checkPipeline = redis.pipeline();
+  checkPipeline.zremrangebyscore(redisKey, '-inf', windowStart);
+  checkPipeline.zcard(redisKey);
+  const checkResults = await checkPipeline.exec();
+  const count = (checkResults?.[1]?.[1] as number) ?? 0;
 
-  const count = (results?.[2]?.[1] as number) ?? 0;
-  return { success: count <= limit, remaining: Math.max(0, limit - count) };
+  if (count >= limit) {
+    return { success: false, remaining: 0 };
+  }
+
+  // Only record the request when under the limit
+  const recordPipeline = redis.pipeline();
+  recordPipeline.zadd(redisKey, now, `${now}-${randomUUID()}`);
+  recordPipeline.expire(redisKey, windowSec + 1);
+  await recordPipeline.exec();
+
+  return { success: true, remaining: Math.max(0, limit - count - 1) };
 }

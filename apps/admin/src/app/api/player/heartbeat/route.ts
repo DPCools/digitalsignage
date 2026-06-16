@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-  const { success } = await rateLimit(`heartbeat:${ip}:${body.screenId}`, 4, 60);
+  // Rate-limit per authenticated principal (orgSlug:screenId) — not IP, which is spoofable via XFF
+  const { success } = await rateLimit(`heartbeat:${body.orgSlug}:${body.screenId}`, 4, 60);
   if (!success) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
 
   const db = getTenantClient(body.orgSlug);

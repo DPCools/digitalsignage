@@ -20,7 +20,7 @@ export const templatesRouter = router({
     .input(z.object({
       name: z.string().min(1),
       html: z.string(),
-      css: z.string().optional(),
+      // css field omitted — embed styles as <style> inside html where sanitizeHtml strips dangerous rules
       variables: z.array(z.object({
         name: z.string(),
         type: z.enum(['text', 'image', 'color', 'number']),
@@ -37,12 +37,11 @@ export const templatesRouter = router({
       })
     ),
 
-  update: tenantProcedure
+  update: adminProcedure
     .input(z.object({
       id: z.string(),
       name: z.string().min(1).optional(),
       html: z.string().optional(),
-      css: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
       const { id, html, ...rest } = input;
