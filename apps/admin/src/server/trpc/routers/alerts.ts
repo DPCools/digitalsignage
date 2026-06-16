@@ -19,9 +19,12 @@ export const alertsRouter = router({
       backgroundColor: z.string().default('#FF0000'),
       textColor: z.string().default('#FFFFFF'),
       screenIds: z.array(z.string()).default([]),
-      expiresAt: z.string().optional(),
+      expiresAt: z.string().datetime().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Deactivate any existing active alerts before creating a new one
+      await ctx.db.emergencyAlert.updateMany({ where: { isActive: true }, data: { isActive: false } });
+
       const alert = await ctx.db.emergencyAlert.create({
         data: {
           ...input,
@@ -38,11 +41,9 @@ export const alertsRouter = router({
       };
 
       if (alert.screenIds.length === 0) {
-        await emitToOrg(ctx.orgSlug, 'alert:emergency', payload);
+        emitToOrg(ctx.orgSlug, 'alert:emergency', payload);
       } else {
-        await Promise.all(
-          alert.screenIds.map((id) => emitToScreen(ctx.orgSlug, id, 'alert:emergency', payload))
-        );
+        alert.screenIds.forEach((id) => emitToScreen(ctx.orgSlug, id, 'alert:emergency', payload));
       }
 
       return alert;
@@ -56,9 +57,9 @@ export const alertsRouter = router({
         data: { isActive: false },
       });
       if (alert.screenIds.length === 0) {
-        await emitToOrg(ctx.orgSlug, 'alert:clear');
+        emitToOrg(ctx.orgSlug, 'alert:clear');
       } else {
-        await Promise.all(alert.screenIds.map((id) => emitToScreen(ctx.orgSlug, id, 'alert:clear')));
+        alert.screenIds.forEach((id) => emitToScreen(ctx.orgSlug, id, 'alert:clear'));
       }
       return alert;
     }),
