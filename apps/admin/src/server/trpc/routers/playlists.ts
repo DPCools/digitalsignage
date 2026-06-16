@@ -26,8 +26,12 @@ export const playlistsRouter = router({
 
   update: tenantProcedure
     .input(z.object({ id: z.string(), name: z.string().min(1).optional(), description: z.string().optional(), isDefault: z.boolean().optional() }))
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      if (data.isDefault) {
+        // Ensure only one default playlist per tenant
+        await ctx.db.playlist.updateMany({ where: { isDefault: true, NOT: { id } }, data: { isDefault: false } });
+      }
       return ctx.db.playlist.update({ where: { id }, data });
     }),
 
@@ -44,9 +48,13 @@ export const playlistsRouter = router({
       zone: z.string().default('main'),
     }))
     .mutation(async ({ ctx, input }) => {
-      const count = await ctx.db.playlistItem.count({ where: { playlistId: input.playlistId } });
-      return ctx.db.playlistItem.create({
-        data: { ...input, position: count },
+      return ctx.db.$transaction(async (tx) => {
+        const agg = await tx.playlistItem.aggregate({
+          where: { playlistId: input.playlistId },
+          _max: { position: true },
+        });
+        const position = (agg._max.position ?? -1) + 1;
+        return tx.playlistItem.create({ data: { ...input, position } });
       });
     }),
 
@@ -57,12 +65,13 @@ export const playlistsRouter = router({
   reorderItems: tenantProcedure
     .input(z.object({
       playlistId: z.string(),
-      itemIds: z.array(z.string()), // new order
+      itemIds: z.array(z.string()),
     }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.$transaction(
         input.itemIds.map((id, position) =>
-          ctx.db.playlistItem.update({ where: { id }, data: { position } })
+          // playlistId in where ensures items belong to this playlist (ownership + FK guard)
+          ctx.db.playlistItem.update({ where: { id, playlistId: input.playlistId }, data: { position } })
         )
       );
       return { ok: true };

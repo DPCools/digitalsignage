@@ -38,7 +38,8 @@ export const schedulesRouter = router({
         data: {
           ...rest,
           startDate: startDate ? new Date(startDate) : undefined,
-          endDate: endDate ? new Date(endDate) : null,
+          // undefined = leave unchanged; null/'' = clear; string = set new date
+          endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : undefined,
         },
       });
     }),
