@@ -35,22 +35,46 @@ export const alertTemplatesRouter = router({
     }),
 
   update: adminProcedure
-    .input(templateInput.partial().extend({ id: z.string() }))
+    .input(
+      templateInput
+        .omit({ autoExpireMinutes: true })
+        .partial()
+        .extend({
+          id: z.string(),
+          autoExpireMinutes: z.number().int().positive().nullable().optional(),
+        })
+    )
     .mutation(async ({ ctx, input }) => {
       const { id, autoExpireMinutes, ...data } = input;
-      const updateData: any = { ...data };
+      const updateData = { ...data } as Record<string, unknown>;
       if (autoExpireMinutes !== undefined) {
         updateData.autoExpireMinutes = autoExpireMinutes ?? null;
       }
-      return ctx.db.alertTemplate.update({
-        where: { id },
-        data: updateData,
-      });
+      try {
+        return await ctx.db.alertTemplate.update({
+          where: { id },
+          data: updateData,
+        });
+      } catch (e: unknown) {
+        if (e instanceof Error && 'code' in e && (e as { code: string }).code === 'P2025') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Template not found' });
+        }
+        throw e;
+      }
     }),
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const activeAlert = await ctx.db.emergencyAlert.findFirst({
+        where: { templateId: input.id, isActive: true },
+      });
+      if (activeAlert) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Cannot delete a template with an active alert. Deactivate the alert first.',
+        });
+      }
       return ctx.db.alertTemplate.delete({ where: { id: input.id } });
     }),
 
@@ -60,9 +84,6 @@ export const alertTemplatesRouter = router({
       // Load the template by id
       const template = await ctx.db.alertTemplate.findUnique({ where: { id: input.id } });
       if (!template) throw new TRPCError({ code: 'NOT_FOUND' });
-
-      // Deactivate all existing active alerts
-      await ctx.db.emergencyAlert.updateMany({ where: { isActive: true }, data: { isActive: false } });
 
       // Resolve target screen IDs based on targetType
       let screenIds: string[] = [];
@@ -74,25 +95,41 @@ export const alertTemplatesRouter = router({
           select: { id: true },
         });
         screenIds = screens.map((s) => s.id);
+        if (screenIds.length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No screens found in the specified groups' });
+        }
       } else if (template.targetType === 'SCREENS') {
         screenIds = template.targetScreenIds;
       }
 
-      // Create EmergencyAlert record
-      const alert = await ctx.db.emergencyAlert.create({
-        data: {
-          title: template.title,
-          message: template.message,
-          backgroundColor: template.backgroundColor,
-          textColor: template.textColor,
-          templateId: template.id,
-          screenIds,
-          isActive: true,
-          expiresAt: template.autoExpireMinutes
-            ? new Date(Date.now() + template.autoExpireMinutes * 60_000)
-            : undefined,
-          createdBy: ctx.session.user.id,
-        },
+      // Clear existing active alerts from player screens first (before transaction)
+      const existingActive = await ctx.db.emergencyAlert.findMany({ where: { isActive: true } });
+      for (const existing of existingActive) {
+        if (existing.screenIds.length === 0) {
+          emitToOrg(ctx.orgSlug, 'alert:clear');
+        } else {
+          existing.screenIds.forEach((id) => emitToScreen(ctx.orgSlug, id, 'alert:clear'));
+        }
+      }
+
+      // Deactivate existing alerts and create the new one atomically
+      const alert = await ctx.db.$transaction(async (tx) => {
+        await tx.emergencyAlert.updateMany({ where: { isActive: true }, data: { isActive: false } });
+        return tx.emergencyAlert.create({
+          data: {
+            title: template.title,
+            message: template.message,
+            backgroundColor: template.backgroundColor,
+            textColor: template.textColor,
+            templateId: template.id,
+            screenIds,
+            isActive: true,
+            expiresAt: template.autoExpireMinutes
+              ? new Date(Date.now() + template.autoExpireMinutes * 60_000)
+              : undefined,
+            createdBy: ctx.session.user.id,
+          },
+        });
       });
 
       // Emit socket events
