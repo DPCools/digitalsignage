@@ -7,6 +7,7 @@ import { templatesRouter } from './routers/templates';
 import { playlistsRouter } from './routers/playlists';
 import { schedulesRouter } from './routers/schedules';
 import { alertsRouter } from './routers/alerts';
+import { alertTemplatesRouter } from './routers/alertTemplates';
 import { analyticsRouter } from './routers/analytics';
 
 export const appRouter = router({
@@ -18,6 +19,7 @@ export const appRouter = router({
   playlists: playlistsRouter,
   schedules: schedulesRouter,
   alerts: alertsRouter,
+  alertTemplates: alertTemplatesRouter,
   analytics: analyticsRouter,
 });
 
