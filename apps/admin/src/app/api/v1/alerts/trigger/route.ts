@@ -10,6 +10,8 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  // Prevent the ?apiKey= query param from leaking via Referer on any redirects
+  'Referrer-Policy': 'no-referrer',
 };
 
 export async function OPTIONS() {
@@ -55,15 +57,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing API key' }, { status: 401, headers: CORS });
   }
 
-  // Rate limit before hitting the DB
-  const { success } = await rateLimit(`v1:alerts:trigger:${orgSlug}`, 10, 60);
-  if (!success) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: CORS });
-  }
-
   const db = getTenantClient(orgSlug);
 
-  // Validate API key
+  // Authenticate first — rate limit is keyed on the verified key id, not orgSlug,
+  // so unauthenticated requests cannot exhaust a legitimate caller's quota.
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
   const apiKey = await db.apiKey.findFirst({
     where: {
@@ -74,6 +71,12 @@ export async function POST(req: NextRequest) {
   });
   if (!apiKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS });
+  }
+
+  // Rate limit per verified key (not per org) to prevent key holders from starving each other
+  const { success } = await rateLimit(`v1:alerts:trigger:${apiKey.id}`, 10, 60);
+  if (!success) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: CORS });
   }
 
   // Fetch template
