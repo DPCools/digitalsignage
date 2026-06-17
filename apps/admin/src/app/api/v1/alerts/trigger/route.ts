@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { getTenantClient } from '@signflow/db';
 import type { EmergencyAlertConfig } from '@signflow/types';
-import { isSafeOrgSlug } from '@/lib/player-auth';
+import { isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { emitToOrg, emitToScreen } from '@/server/socket';
 
@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
 
   if (!isSafeOrgSlug(orgSlug)) {
     return NextResponse.json({ error: 'Invalid orgSlug' }, { status: 400, headers: CORS });
+  }
+
+  if (!isSafeId(templateId)) {
+    return NextResponse.json({ error: 'Invalid templateId' }, { status: 400, headers: CORS });
   }
 
   // Extract API key: Authorization header first, then query param
@@ -99,15 +103,8 @@ export async function POST(req: NextRequest) {
     screenIds = template.targetScreenIds;
   }
 
-  // Emit alert:clear to existing active alerts' screens
+  // Fetch existing active alerts before the transaction so we know which screens to clear
   const existingActive = await db.emergencyAlert.findMany({ where: { isActive: true } });
-  for (const existing of existingActive) {
-    if (existing.screenIds.length === 0) {
-      emitToOrg(orgSlug, 'alert:clear');
-    } else {
-      existing.screenIds.forEach((id) => emitToScreen(orgSlug, id, 'alert:clear'));
-    }
-  }
 
   // Deactivate existing alerts and create the new one atomically
   const alert = await db.$transaction(async (tx) => {
@@ -129,7 +126,16 @@ export async function POST(req: NextRequest) {
     });
   });
 
-  // Emit socket event
+  // Transaction succeeded — emit alert:clear to screens that had an active alert
+  for (const existing of existingActive) {
+    if (existing.screenIds.length === 0) {
+      emitToOrg(orgSlug, 'alert:clear');
+    } else {
+      existing.screenIds.forEach((id) => emitToScreen(orgSlug, id, 'alert:clear'));
+    }
+  }
+
+  // Emit socket event for the new alert
   const payload: EmergencyAlertConfig = {
     id: alert.id,
     title: alert.title,

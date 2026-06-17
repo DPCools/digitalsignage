@@ -63,8 +63,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: CORS });
   }
 
-  // Find all active alerts and emit clear events to their screens
+  // Find all active alerts (before deactivating) so we know which screens to notify
   const activeAlerts = await db.emergencyAlert.findMany({ where: { isActive: true } });
+
+  // Deactivate all active alerts first; only emit socket events if the write succeeds
+  await db.emergencyAlert.updateMany({ where: { isActive: true }, data: { isActive: false } });
+
   for (const alert of activeAlerts) {
     if (alert.screenIds.length === 0) {
       emitToOrg(orgSlug, 'alert:clear');
@@ -72,9 +76,6 @@ export async function POST(req: NextRequest) {
       alert.screenIds.forEach((id) => emitToScreen(orgSlug, id, 'alert:clear'));
     }
   }
-
-  // Deactivate all active alerts
-  await db.emergencyAlert.updateMany({ where: { isActive: true }, data: { isActive: false } });
 
   // Update lastUsedAt
   await db.apiKey.update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } });
