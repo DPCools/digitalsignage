@@ -9,6 +9,7 @@ import { schedulesRouter } from './routers/schedules';
 import { alertsRouter } from './routers/alerts';
 import { alertTemplatesRouter } from './routers/alertTemplates';
 import { analyticsRouter } from './routers/analytics';
+import { apiKeysRouter } from './routers/apiKeys';
 
 export const appRouter = router({
   orgs: orgsRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   alerts: alertsRouter,
   alertTemplates: alertTemplatesRouter,
   analytics: analyticsRouter,
+  apiKeys: apiKeysRouter,
 });
 
 export type AppRouter = typeof appRouter;
