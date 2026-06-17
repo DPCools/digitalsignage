@@ -3,7 +3,7 @@ import { randomBytes, createHash } from 'crypto';
 import { router, adminProcedure } from '../init';
 import { TRPCError } from '@trpc/server';
 
-// Generate API key: sgk_ prefix + 32 random hex characters = 68 chars total
+// Generate API key: sgk_ prefix + 64 hex characters (32 random bytes) = 68 chars total
 function generateRawKey(): string {
   return `sgk_${randomBytes(32).toString('hex')}`;
 }
@@ -38,7 +38,7 @@ export const apiKeysRouter = router({
 
   create: adminProcedure
     .input(z.object({
-      name: z.string().min(1),
+      name: z.string().min(1).max(256),
       expiresAt: z.string().datetime().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -93,8 +93,7 @@ export const apiKeysRouter = router({
           },
         });
       } catch (error: unknown) {
-        const e = error as { code?: string };
-        if (e.code === 'P2025') {
+        if (error != null && typeof error === 'object' && 'code' in error && (error as { code: unknown }).code === 'P2025') {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'API key not found' });
         }
         throw error;
@@ -108,8 +107,7 @@ export const apiKeysRouter = router({
         await ctx.db.apiKey.delete({ where: { id: input.id } });
         return { ok: true };
       } catch (error: unknown) {
-        const e = error as { code?: string };
-        if (e.code === 'P2025') {
+        if (error != null && typeof error === 'object' && 'code' in error && (error as { code: unknown }).code === 'P2025') {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'API key not found' });
         }
         throw error;
