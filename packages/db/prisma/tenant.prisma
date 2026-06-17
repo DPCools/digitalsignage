@@ -29,12 +29,16 @@ model Screen {
 }
 
 model ScreenGroup {
-  id        String   @id @default(cuid())
-  name      String
-  location  String?
-  screens   Screen[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  type              GroupType @default(OTHER)
+  location          String?
+  description       String?
+  defaultPlaylistId String?
+  defaultPlaylist   Playlist? @relation("GroupDefaultPlaylist", fields: [defaultPlaylistId], references: [id])
+  screens           Screen[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model ContentItem {
@@ -78,7 +82,8 @@ model Playlist {
   isDefault      Boolean        @default(false)
   items          PlaylistItem[]
   schedules      Schedule[]
-  currentScreens Screen[]       @relation("CurrentScreenPlaylist")
+  currentScreens  Screen[]       @relation("CurrentScreenPlaylist")
+  defaultForGroups ScreenGroup[] @relation("GroupDefaultPlaylist")
   createdBy      String
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -124,11 +129,40 @@ model EmergencyAlert {
   message         String
   backgroundColor String    @default("#FF0000")
   textColor       String    @default("#FFFFFF")
+  templateId      String?
   screenIds       String[]
   isActive        Boolean   @default(true)
   expiresAt       DateTime?
   createdBy       String
   createdAt       DateTime  @default(now())
+}
+
+model AlertTemplate {
+  id                String     @id @default(cuid())
+  name              String
+  title             String
+  message           String
+  backgroundColor   String     @default("#FF0000")
+  textColor         String     @default("#FFFFFF")
+  targetType        TargetType @default(ALL)
+  targetGroupIds    String[]
+  targetScreenIds   String[]
+  autoExpireMinutes Int?
+  createdBy         String
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyPrefix  String    @unique
+  keyHash    String    @unique
+  createdBy  String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 }
 
 model ScreenHeartbeat {
@@ -150,8 +184,49 @@ model Impression {
   durationMs    Int
 }
 
-enum Orientation      { LANDSCAPE PORTRAIT }
-enum ContentType      { IMAGE VIDEO HTML_TEMPLATE RSS_FEED PDF }
-enum ContentStatus    { PENDING APPROVED REJECTED }
-enum TransitionType   { FADE SLIDE_LEFT SLIDE_RIGHT ZOOM NONE }
-enum RecurrenceType   { ONCE DAILY WEEKLY MONTHLY }
+enum GroupType {
+  SITE
+  LOCATION
+  DEPARTMENT
+  OTHER
+}
+
+enum Orientation {
+  LANDSCAPE
+  PORTRAIT
+}
+
+enum ContentType {
+  IMAGE
+  VIDEO
+  HTML_TEMPLATE
+  RSS_FEED
+  PDF
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TransitionType {
+  FADE
+  SLIDE_LEFT
+  SLIDE_RIGHT
+  ZOOM
+  NONE
+}
+
+enum RecurrenceType {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum TargetType {
+  ALL
+  GROUPS
+  SCREENS
+}
