@@ -441,6 +441,14 @@ export default function AlertsPage() {
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="font-semibold text-white truncate">{t.name}</p>
                 <p className="text-sm text-gray-400 truncate">{t.title} — {t.message}</p>
+                <button
+                  onClick={async () => { await copyText(t.id); }}
+                  title="Copy template ID"
+                  className="flex items-center gap-1.5 group w-fit"
+                >
+                  <code className="text-xs text-gray-500 font-mono group-hover:text-gray-300 transition-colors">{t.id}</code>
+                  <Copy className="h-3 w-3 text-gray-600 group-hover:text-gray-300 transition-colors shrink-0" />
+                </button>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   {t.targetType === 'ALL' && (
                     <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">All Screens</span>
