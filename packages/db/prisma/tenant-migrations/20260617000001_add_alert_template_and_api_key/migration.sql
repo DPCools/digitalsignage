@@ -70,3 +70,14 @@ UPDATE "EmergencyAlert"
 
 ALTER TABLE "EmergencyAlert"
   ALTER COLUMN "updatedAt" SET NOT NULL;
+
+-- 6. Add ApiKey.updatedAt (backfill existing rows; safe no-op if column already present)
+ALTER TABLE "ApiKey"
+  ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3);
+
+UPDATE "ApiKey"
+  SET "updatedAt" = "createdAt"
+  WHERE "updatedAt" IS NULL;
+
+ALTER TABLE "ApiKey"
+  ALTER COLUMN "updatedAt" SET NOT NULL;
