@@ -372,16 +372,17 @@ export default function AlertsPage() {
           )}
 
           {/* Ad-hoc form */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-3">
+          {/* suppressHydrationWarning: browser password managers (e.g. Dashlane) inject data-* attrs into form elements */}
+          <div suppressHydrationWarning className="rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-3">
             <h2 className="font-semibold text-white flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-red-400" /> New Ad-hoc Alert
             </h2>
-            <input placeholder="Alert title" value={adHocTitle} onChange={(e) => setAdHocTitle(e.target.value)}
-              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm" />
-            <textarea placeholder="Alert message" value={adHocMessage} onChange={(e) => setAdHocMessage(e.target.value)}
+            <input suppressHydrationWarning placeholder="Alert title" value={adHocTitle} onChange={(e) => setAdHocTitle(e.target.value)}
+              autoComplete="off" className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm" />
+            <textarea suppressHydrationWarning placeholder="Alert message" value={adHocMessage} onChange={(e) => setAdHocMessage(e.target.value)}
               rows={3} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm resize-none" />
             {createAlert.error && <p className="text-sm text-red-400">{createAlert.error.message}</p>}
-            <button onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage })}
+            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage })}
               disabled={!adHocTitle || !adHocMessage || createAlert.isPending}
               className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50">
               {createAlert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
