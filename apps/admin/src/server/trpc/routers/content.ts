@@ -119,6 +119,52 @@ export const contentRouter = router({
       })
     ),
 
+  createWebPage: adminProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      url: z.string().url(),
+      refreshInterval: z.number().int().min(1).nullable(),
+      duration: z.number().int().min(1).default(30),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.contentItem.create({
+        data: {
+          name: input.name,
+          type: 'WEB_PAGE',
+          url: input.url,
+          metadata: { refreshInterval: input.refreshInterval },
+          status: 'APPROVED',
+          duration: input.duration,
+          fileSize: null,
+          uploadedBy: ctx.session.user.id,
+        },
+      });
+    }),
+
+  createCctvGrid: adminProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      streams: z.array(z.object({
+        url: z.string().min(1),
+        label: z.string().optional(),
+      })).min(1).max(4),
+      duration: z.number().int().min(1).default(30),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.contentItem.create({
+        data: {
+          name: input.name,
+          type: 'CCTV_GRID',
+          url: '',
+          metadata: { streams: input.streams },
+          status: 'APPROVED',
+          duration: input.duration,
+          fileSize: null,
+          uploadedBy: ctx.session.user.id,
+        },
+      });
+    }),
+
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
