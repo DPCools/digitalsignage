@@ -1,11 +1,172 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { PlaylistItemConfig } from '@signflow/types';
-import { getCachedAsset } from '@/lib/db';
+import { getCachedAsset, getPlayerConfig } from '@/lib/db';
 
 const VIDEO_ERROR_ADVANCE_MS = 4000;
 
-export function ContentPlayer({ item, onVideoEnd }: { item: PlaylistItemConfig; onVideoEnd?: () => void }) {
+const ADMIN_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
+// ---------------------------------------------------------------------------
+// WebPagePlayer — renders an iframe that auto-refreshes at a configured interval
+// ---------------------------------------------------------------------------
+
+function WebPagePlayer({ url, refreshSecs, fill }: {
+  url: string;
+  refreshSecs: number | null;
+  fill: React.CSSProperties;
+}) {
+  const [key, setKey] = useState(0);
+
+  useEffect(() => {
+    if (!refreshSecs || refreshSecs <= 0) return;
+    const t = setInterval(() => setKey((k) => k + 1), refreshSecs * 1000);
+    return () => clearInterval(t);
+  }, [refreshSecs]);
+
+  return (
+    <iframe
+      key={key}
+      src={url}
+      style={{ ...fill, border: 'none' }}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+      title="web page"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CctvGrid — renders a 2×2 grid of MJPEG streams via the admin proxy
+// ---------------------------------------------------------------------------
+
+interface CctvStream {
+  url: string;
+  label?: string;
+}
+
+function CctvGrid({ streams, contentItemId, fill, screenId, orgSlug }: {
+  streams: CctvStream[];
+  contentItemId: string;
+  fill: React.CSSProperties;
+  screenId: string;
+  orgSlug: string;
+}) {
+  const [token, setToken] = useState<string>('');
+  const [offlineMap, setOfflineMap] = useState<Record<number, boolean>>({});
+  const retryTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  // Load the short-lived stream token from cached player config on mount.
+  // playerStreamToken is a time-windowed HMAC (10-20 min validity) specifically
+  // for <img src> proxy URLs — never exposes the long-lived bearer token in URLs.
+  useEffect(() => {
+    getPlayerConfig().then((cfg) => {
+      if (cfg?.playerStreamToken) setToken(cfg.playerStreamToken);
+    });
+  }, []);
+
+  // Clean up retry timers on unmount
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      Object.values(retryTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const handleError = (index: number) => {
+    setOfflineMap((prev) => ({ ...prev, [index]: true }));
+    // Retry after 10 seconds by toggling back to online — the img src stays the same
+    // so the browser will re-attempt the request on next render
+    retryTimers.current[index] = setTimeout(() => {
+      setOfflineMap((prev) => ({ ...prev, [index]: false }));
+    }, 10_000);
+  };
+
+  const cols = streams.length >= 2 ? 2 : 1;
+
+  return (
+    <div
+      style={{
+        ...fill,
+        display: 'grid',
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gridTemplateRows: `repeat(${Math.ceil(streams.length / cols)}, 1fr)`,
+        gap: 2,
+        background: '#000',
+      }}
+    >
+      {streams.map((stream, index) => {
+        const proxyUrl = token
+          ? `${ADMIN_BASE}/api/stream/${encodeURIComponent(contentItemId)}-${index}?orgSlug=${encodeURIComponent(orgSlug)}&screenId=${encodeURIComponent(screenId)}&token=${encodeURIComponent(token)}`
+          : null;
+
+        return (
+          <div key={index} style={{ position: 'relative', overflow: 'hidden', background: '#111' }}>
+            {offlineMap[index] || !proxyUrl ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#222',
+                  color: '#666',
+                  fontFamily: 'sans-serif',
+                  fontSize: '1.2vw',
+                }}
+              >
+                Camera offline
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={proxyUrl}
+                alt={stream.label ?? `Camera ${index + 1}`}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                onError={() => handleError(index)}
+              />
+            )}
+            {stream.label && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 6,
+                  left: 6,
+                  background: 'rgba(0,0,0,0.55)',
+                  color: '#fff',
+                  fontSize: '0.9vw',
+                  fontFamily: 'sans-serif',
+                  padding: '2px 6px',
+                  borderRadius: 3,
+                  pointerEvents: 'none',
+                }}
+              >
+                {stream.label}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ContentPlayer
+// ---------------------------------------------------------------------------
+
+export function ContentPlayer({
+  item,
+  screenId,
+  orgSlug,
+  onVideoEnd,
+}: {
+  item: PlaylistItemConfig;
+  screenId?: string;
+  orgSlug?: string;
+  onVideoEnd?: () => void;
+}) {
   const [src, setSrc] = useState(item.url);
   const [videoError, setVideoError] = useState(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +264,24 @@ export function ContentPlayer({ item, onVideoEnd }: { item: PlaylistItemConfig; 
 
     case 'RSS_FEED':
       return null;
+
+    case 'WEB_PAGE': {
+      const refreshSecs = (item.metadata?.refreshInterval as number | null) ?? null;
+      return <WebPagePlayer url={item.url} refreshSecs={refreshSecs} fill={fill} />;
+    }
+
+    case 'CCTV_GRID': {
+      const streams = (item.metadata?.streams as Array<{ url: string; label?: string }> | undefined) ?? [];
+      return (
+        <CctvGrid
+          streams={streams}
+          contentItemId={item.contentItemId}
+          fill={fill}
+          screenId={screenId ?? ''}
+          orgSlug={orgSlug ?? ''}
+        />
+      );
+    }
 
     default:
       return null;

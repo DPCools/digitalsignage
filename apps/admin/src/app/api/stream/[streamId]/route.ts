@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
-import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 // Upstream content-types accepted from cameras. Anything outside this list is rejected
 // to prevent XSS via Content-Type passthrough.
@@ -49,15 +49,15 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
-  // Accept token via Authorization header OR ?token= query param.
-  // <img src> cannot set custom headers so the query param fallback is needed.
-  // Security note: this exposes the bearer token in server-side access logs.
-  // The token is a strong HMAC scoped to {screenId, orgSlug} — it cannot be used
-  // to access any other screen's resources. Full mitigation (short-lived signed URLs
-  // or HttpOnly cookie) is a follow-up improvement.
+  // Two accepted auth paths:
+  // 1. Authorization: Bearer <playerToken> header (server-to-server / testing)
+  // 2. ?token=<streamToken> query param — used by <img src> which cannot set headers.
+  //    streamToken is a short-lived HMAC (10-20 min window) distinct from the
+  //    long-lived bearer token, so it doesn't permanently expose credentials in logs.
   const tokenParam = req.nextUrl.searchParams.get('token');
-  const authHeader = req.headers.get('authorization') ?? (tokenParam ? `Bearer ${tokenParam}` : null);
-  if (!verifyPlayerToken(screenId, orgSlug, authHeader)) {
+  const bearerOk = verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'));
+  const streamOk = verifyStreamToken(screenId, orgSlug, tokenParam);
+  if (!bearerOk && !streamOk) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

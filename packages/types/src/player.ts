@@ -62,6 +62,7 @@ export interface PlayerConfig {
   weatherLocation?: string;
   timezone: string;
   locale: string;
+  playerStreamToken?: string;  // short-lived token for CCTV stream proxy URLs (<img src>)
 }
 
 export interface ResolvedZoneQueue {

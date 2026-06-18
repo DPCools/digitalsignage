@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import type { PlayerConfig } from '@signflow/types';
-import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyPlayerToken, generateStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -94,6 +94,7 @@ export async function GET(req: NextRequest) {
       : null,
     timezone: 'UTC',
     locale: 'en',
+    playerStreamToken: generateStreamToken(screenId, orgSlug),
   };
 
   return NextResponse.json(config);
