@@ -30,8 +30,10 @@ export const templatesRouter = router({
     .mutation(({ ctx, input }) =>
       ctx.db.template.create({
         data: {
-          ...input,
+          name: input.name,
           html: sanitizeHtml(input.html),
+          // Cast variables array to Prisma's Json type
+          variables: input.variables as unknown as Parameters<typeof ctx.db.template.create>[0]['data']['variables'],
           createdBy: ctx.session.user.id,
         },
       })

@@ -22,7 +22,8 @@ export default function LoginPage() {
     if (result?.error) {
       setError('Invalid email or password');
     } else {
-      router.push('/dashboard');
+      // Use window.location to avoid next/navigation typedRoutes inference issues
+      window.location.href = '/dashboard';
     }
   }
 

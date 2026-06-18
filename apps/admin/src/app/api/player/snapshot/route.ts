@@ -4,6 +4,16 @@ import { getMinio } from '@/lib/minio';
 import type { SnapshotRequest } from '@signflow/types';
 import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
+
 export async function POST(req: NextRequest) {
   const body: SnapshotRequest = await req.json();
   if (!body.screenId || !body.orgSlug || !body.imageBase64) {
@@ -23,7 +33,7 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(body.imageBase64, 'base64');
   const key = `snapshots/${body.orgSlug}/${body.screenId}.png`;
   const minio = getMinio();
-  await minio.putObject(process.env.MINIO_BUCKET!, key, buffer, { 'Content-Type': 'image/png' });
+  await minio.putObject(process.env.MINIO_BUCKET!, key, buffer, buffer.length, { 'Content-Type': 'image/png' });
 
   const url = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${key}`;
   const db = getTenantClient(body.orgSlug);

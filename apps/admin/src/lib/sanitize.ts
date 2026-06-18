@@ -25,7 +25,6 @@ export function sanitizeHtml(html: string): string {
     ADD_ATTR: ['src'],  // src is allowed but gated by ALLOWED_URI_REGEXP
     ALLOW_DATA_ATTR: true,
     ALLOW_ARIA_ATTR: true,
-    FORBID_SCRIPTS: true,
     FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'iframe', 'style'],
     FORCE_BODY: true,
   });

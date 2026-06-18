@@ -29,6 +29,9 @@ importers:
       '@dnd-kit/sortable':
         specifier: ^8.0.0
         version: 8.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+      '@dnd-kit/utilities':
+        specifier: ^3.2.2
+        version: 3.2.2(react@19.2.7)
       '@signflow/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -68,6 +71,9 @@ importers:
       isomorphic-dompurify:
         specifier: ^2.16.0
         version: 2.36.0
+      lucide-react:
+        specifier: ^0.460.0
+        version: 0.460.0(react@19.2.7)
       minio:
         specifier: ^8.0.0
         version: 8.0.7
