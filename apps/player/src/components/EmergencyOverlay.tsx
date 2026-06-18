@@ -5,15 +5,23 @@ import type { EmergencyAlertConfig } from '@signflow/types';
 export function EmergencyOverlay({ alert }: { alert: EmergencyAlertConfig | null }) {
   const [flash, setFlash] = useState(true);
 
+  // flashInterval is derived here so it can be used as an effect dependency.
+  // undefined severity defaults to EMERGENCY behaviour (600ms) — safe for alerts
+  // published before this field was introduced.
   const flashInterval = alert?.severity === 'INFO' ? null
     : alert?.severity === 'WARNING' ? 1200
-    : 600; // EMERGENCY is default
+    : 600; // EMERGENCY / undefined default
 
   useEffect(() => {
-    if (!alert?.isActive || flashInterval === null) return;
+    if (!alert?.isActive) return;
+    // Always reset to solid before starting (or not starting) a new interval,
+    // so stale flash state from a previous alert can never bleed through.
+    setFlash(true);
+    if (flashInterval === null) return; // INFO: stay solid, no interval needed
     const t = setInterval(() => setFlash((f) => !f), flashInterval);
     return () => clearInterval(t);
-  }, [alert?.isActive, flashInterval]);
+  // Include alert?.id so a replacement alert (same isActive=true) re-triggers.
+  }, [alert?.id, alert?.isActive, flashInterval]);
 
   if (!alert?.isActive) return null;
 
