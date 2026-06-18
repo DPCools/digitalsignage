@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { Upload, Loader2, Trash2 } from 'lucide-react';
+import { Upload, Loader2, Trash2, Globe, Camera, X, Plus } from 'lucide-react';
 
 type DeleteTarget = { ids: string[]; label: string };
 
@@ -19,6 +19,238 @@ type ContentItemRow = {
   createdAt: Date;
 };
 
+// ---------------------------------------------------------------------------
+// WebPageModal
+// ---------------------------------------------------------------------------
+function WebPageModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState('');
+  const [duration, setDuration] = useState('30');
+
+  const create = trpc.content.createWebPage.useMutation({ onSuccess: onSaved });
+
+  function handleSubmit() {
+    create.mutate({
+      name,
+      url,
+      refreshInterval: refreshInterval ? parseInt(refreshInterval, 10) * 60 : null,
+      duration: parseInt(duration, 10),
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-white">Add Web Page</h2>
+          <button onClick={onClose}><X className="h-4 w-4 text-gray-400" /></button>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Display name <span className="text-red-400">*</span></label>
+          <input
+            placeholder="e.g. Company Dashboard"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">URL <span className="text-red-400">*</span></label>
+          <input
+            placeholder="https://example.com"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Auto-refresh interval (minutes, leave blank = never refresh)</label>
+          <input
+            type="number"
+            min={1}
+            placeholder="e.g. 5"
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(e.target.value)}
+            className="w-32 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Duration per playlist slot (seconds) <span className="text-red-400">*</span></label>
+          <input
+            type="number"
+            min={1}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="w-32 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        {create.error && <p className="text-sm text-red-400">{create.error.message}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-gray-700 py-2 text-sm text-gray-300 hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name || !url || !duration || create.isPending}
+            className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Add Web Page
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CctvGridModal
+// ---------------------------------------------------------------------------
+type StreamRow = { url: string; label: string };
+
+function CctvGridModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('');
+  const [duration, setDuration] = useState('30');
+  const [streams, setStreams] = useState<StreamRow[]>([{ url: '', label: '' }]);
+
+  const create = trpc.content.createCctvGrid.useMutation({ onSuccess: onSaved });
+
+  function addStream() {
+    if (streams.length < 4) {
+      setStreams((prev) => [...prev, { url: '', label: '' }]);
+    }
+  }
+
+  function removeStream(index: number) {
+    setStreams((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateStream(index: number, field: keyof StreamRow, value: string) {
+    setStreams((prev) => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  }
+
+  function handleSubmit() {
+    create.mutate({
+      name,
+      streams: streams.filter((s) => s.url.trim()),
+      duration: parseInt(duration, 10),
+    });
+  }
+
+  const hasValidStream = streams.some((s) => s.url.trim());
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-white">Add CCTV Grid</h2>
+          <button onClick={onClose}><X className="h-4 w-4 text-gray-400" /></button>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Display name <span className="text-red-400">*</span></label>
+          <input
+            placeholder="e.g. Reception Cameras"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Duration per playlist slot (seconds) <span className="text-red-400">*</span></label>
+          <input
+            type="number"
+            min={1}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="w-32 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          />
+        </div>
+
+        {/* Stream rows */}
+        <div className="space-y-3">
+          <span className="text-xs text-gray-400 block">Camera streams (up to 4)</span>
+          {streams.map((stream, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div className="flex-1 space-y-1.5">
+                <input
+                  placeholder="Stream URL (e.g. http://user:pass@192.168.1.10/...)"
+                  value={stream.url}
+                  onChange={(e) => updateStream(index, 'url', e.target.value)}
+                  className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+                />
+                <input
+                  placeholder="Label (optional, shown in grid overlay)"
+                  value={stream.label}
+                  onChange={(e) => updateStream(index, 'label', e.target.value)}
+                  className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+                />
+              </div>
+              {streams.length > 1 && (
+                <button
+                  onClick={() => removeStream(index)}
+                  className="shrink-0 rounded p-1.5 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+          {streams.length < 4 && (
+            <button
+              onClick={addStream}
+              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Add stream
+            </button>
+          )}
+        </div>
+
+        {/* Brand URL hints */}
+        <div className="rounded-lg bg-gray-800 border border-gray-700 px-4 py-3 space-y-1.5">
+          <p className="text-xs font-medium text-gray-300">Common stream URL formats</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Axis:</span> http://user:pass@IP/axis-cgi/mjpg/video.cgi</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Hikvision:</span> http://user:pass@IP/Streaming/channels/1/picture (or /ISAPI/...)</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Dahua:</span> http://user:pass@IP/cgi-bin/mjpg/video.cgi</p>
+        </div>
+
+        {create.error && <p className="text-sm text-red-400">{create.error.message}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-gray-700 py-2 text-sm text-gray-300 hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name || !duration || !hasValidStream || create.isPending}
+            className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Add CCTV Grid
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ContentPage
+// ---------------------------------------------------------------------------
 export default function ContentPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -26,6 +258,8 @@ export default function ContentPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showWebPageModal, setShowWebPageModal] = useState(false);
+  const [showCctvModal, setShowCctvModal] = useState(false);
 
   const { data, refetch } = trpc.content.list.useQuery({}, {
     refetchInterval: (query: { state: { data?: { items: Array<{ type: string; url: string }> } } }) =>
@@ -113,6 +347,20 @@ export default function ContentPage() {
               Delete {selected.size} selected
             </button>
           )}
+          <button
+            onClick={() => setShowWebPageModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-gray-700 hover:bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+          >
+            <Globe className="h-4 w-4" />
+            Add Web Page
+          </button>
+          <button
+            onClick={() => setShowCctvModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-gray-700 hover:bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+          >
+            <Camera className="h-4 w-4" />
+            Add CCTV
+          </button>
           <label className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 cursor-pointer transition-colors">
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {uploading ? 'Uploading…' : 'Upload'}
@@ -252,6 +500,22 @@ export default function ContentPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Web Page modal */}
+      {showWebPageModal && (
+        <WebPageModal
+          onClose={() => setShowWebPageModal(false)}
+          onSaved={() => { refetch(); setShowWebPageModal(false); }}
+        />
+      )}
+
+      {/* CCTV Grid modal */}
+      {showCctvModal && (
+        <CctvGridModal
+          onClose={() => setShowCctvModal(false)}
+          onSaved={() => { refetch(); setShowCctvModal(false); }}
+        />
       )}
     </div>
   );
