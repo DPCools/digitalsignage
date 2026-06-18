@@ -7,9 +7,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   transpilePackages: ['@signflow/ui', '@signflow/db', '@signflow/types'],
   serverExternalPackages: ['jsdom', 'isomorphic-dompurify'],
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   async headers() {
     return [
       {
