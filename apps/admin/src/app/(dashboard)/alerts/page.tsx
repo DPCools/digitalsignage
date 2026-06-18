@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { trpc } from '@/lib/trpc-client';
 import {
   AlertTriangle, X, Key, Zap, Trash2, Edit2, Copy, Check, Loader2, Plus,
@@ -281,6 +282,8 @@ function NewKeyModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 // Main page
 // ---------------------------------------------------------------------------
 export default function AlertsPage() {
+  const { data: session } = useSession();
+  const orgSlug = session?.user?.orgSlug ?? 'YOUR_ORG';
   const [tab, setTab] = useState<Tab>('active');
 
   // ---- Tab 1 state
@@ -339,7 +342,7 @@ export default function AlertsPage() {
     return new Date(d).toLocaleDateString();
   }
 
-  const exampleUrl = 'POST https://YOUR-DOMAIN/api/v1/alerts/trigger?orgSlug=YOUR_ORG&templateId=YOUR_TEMPLATE_ID&apiKey=YOUR_KEY';
+  const exampleUrl = `https://YOUR-DOMAIN/api/v1/alerts/trigger?orgSlug=${orgSlug}&templateId=YOUR_TEMPLATE_ID&apiKey=YOUR_KEY`;
 
   return (
     <div className="space-y-6">
@@ -576,7 +579,7 @@ export default function AlertsPage() {
               <li>Copy the <code className="text-gray-300 font-mono text-xs">templateId</code> from the template list.</li>
               <li>On your Axis device, go to <strong className="text-gray-300">System &rarr; Events &rarr; Rules</strong>.</li>
               <li>Add a new rule with Action <em className="text-gray-300">Send notification through HTTP</em>.</li>
-              <li>Paste the URL above, substituting your domain, org slug, template ID, and API key.</li>
+              <li>Paste the URL above, replacing <code className="text-gray-300 font-mono text-xs">YOUR-DOMAIN</code>, <code className="text-gray-300 font-mono text-xs">YOUR_TEMPLATE_ID</code>, and <code className="text-gray-300 font-mono text-xs">YOUR_KEY</code>. The <code className="text-gray-300 font-mono text-xs">orgSlug</code> is already filled in.</li>
               <li>Set the method to <code className="text-gray-300 font-mono text-xs">POST</code> and save.</li>
             </ol>
           </div>
