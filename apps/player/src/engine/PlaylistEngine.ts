@@ -67,13 +67,20 @@ export class PlaylistEngine {
     if (!this.config) return;
     const playlist = resolveActivePlaylist(this.config, now);
 
-    if (playlist?.id === this.state.activePlaylist?.id) return; // no change
+    // Same playlist ID isn't enough — items within it may have changed (push update).
+    // Compare a fingerprint of item IDs+URLs so content edits trigger a reload.
+    if (playlist?.id === this.state.activePlaylist?.id && this.playlistFingerprint(playlist) === this.playlistFingerprint(this.state.activePlaylist)) return;
 
     this.clearAllTimers();
     const zones = this.buildZoneQueues(playlist);
     this.setState({ activePlaylist: playlist, zones });
     this.startAllZones();
     this.preloadForAllZones();
+  }
+
+  private playlistFingerprint(playlist: PlaylistConfig | null): string {
+    if (!playlist) return '';
+    return playlist.items.map(i => `${i.id}:${i.url}`).join('|');
   }
 
   private buildZoneQueues(playlist: PlaylistConfig | null): Record<Zone, ZoneState> {
@@ -107,6 +114,15 @@ export class PlaylistEngine {
 
     this.itemStartTimes.set(zone, Date.now());
     const duration = item.duration * 1000;
+
+    // VIDEO items: wait for the onVideoEnd callback instead of a fixed timer.
+    // Keep a watchdog at 3× declared duration as a failsafe (e.g. if ended never fires).
+    if (item.type === 'VIDEO') {
+      const watchdog = setTimeout(() => this.tick(zone), Math.max(duration * 3, 30_000));
+      this.watchdogTimers.set(zone, watchdog);
+      // Normal timer intentionally omitted — ContentPlayer calls tick() via onVideoEnd.
+      return;
+    }
 
     // Watchdog: if tick doesn't fire within 2× expected duration, force advance
     const watchdog = setTimeout(() => this.tick(zone), duration * 2);
@@ -166,11 +182,12 @@ export class PlaylistEngine {
     const nextIndex = (zoneState.currentIndex + 1) % zoneState.items.length;
     const nextItem = zoneState.items[nextIndex];
     if (!nextItem?.url) return;
+    // Videos stream from the server — blob-caching them wastes memory and breaks range requests
+    if (nextItem.type === 'VIDEO') return;
 
     const cached = await getCachedAsset(nextItem.url);
     if (cached) return;
 
-    // Preload into blob cache
     try {
       const res = await fetch(nextItem.url);
       const blob = await res.blob();
