@@ -3,6 +3,7 @@ export type Zone = 'main' | 'ticker' | 'clock' | 'weather';
 export type ContentType = 'IMAGE' | 'VIDEO' | 'HTML_TEMPLATE' | 'RSS_FEED' | 'PDF';
 export type TransitionType = 'FADE' | 'SLIDE_LEFT' | 'SLIDE_RIGHT' | 'ZOOM' | 'NONE';
 export type RecurrenceType = 'ONCE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+export type AlertSeverity = 'INFO' | 'WARNING' | 'EMERGENCY';
 
 export interface PlaylistItemConfig {
   id: string;
@@ -46,11 +47,14 @@ export interface EmergencyAlertConfig {
   screenIds: string[];    // empty = all screens
   isActive: boolean;
   expiresAt?: string;
+  severity?: AlertSeverity;
 }
 
 export interface PlayerConfig {
   screenId: string;
   orgSlug: string;
+  groupId: string | null;
+  groupDefaultPlaylistId: string | null;
   playlists: PlaylistConfig[];
   schedules: ScheduleConfig[];
   activeAlert: EmergencyAlertConfig | null;
