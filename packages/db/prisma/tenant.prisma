@@ -207,6 +207,8 @@ enum ContentType {
   HTML_TEMPLATE
   RSS_FEED
   PDF
+  WEB_PAGE
+  CCTV_GRID
 }
 
 enum ContentStatus {
