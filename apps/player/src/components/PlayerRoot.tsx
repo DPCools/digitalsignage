@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PlayerConfig, EmergencyAlertConfig } from '@signflow/types';
-import { PlaylistEngine, type EngineState } from '@/engine/PlaylistEngine';
+import { PlaylistEngine, type EngineState, type ZoneState } from '@/engine/PlaylistEngine';
 import { ScreenLayout } from './ScreenLayout';
 import { EmergencyOverlay } from './EmergencyOverlay';
 import { DebugOverlay } from './DebugOverlay';
@@ -9,7 +9,12 @@ import { fetchPlayerConfig, sendHeartbeat } from '@/lib/api';
 import { getConfig, getPlayerConfig, setPlayerConfig } from '@/lib/db';
 import { connectSocket } from '@/lib/socket';
 
-const ZONES_INIT = {} as EngineState['zones'];
+const ZONES_INIT: EngineState['zones'] = {
+  main:    { zone: 'main',    items: [], currentIndex: 0, currentItem: null },
+  ticker:  { zone: 'ticker',  items: [], currentIndex: 0, currentItem: null },
+  clock:   { zone: 'clock',   items: [], currentIndex: 0, currentItem: null },
+  weather: { zone: 'weather', items: [], currentIndex: 0, currentItem: null },
+};
 
 export function PlayerRoot({ screenId }: { screenId: string }) {
   const engineRef = useRef<PlaylistEngine | null>(null);
@@ -20,7 +25,8 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
   const [weatherApiKey, setWeatherApiKey] = useState<string | undefined>(undefined);
   const [weatherLocation, setWeatherLocation] = useState<string | undefined>(undefined);
 
-  const loadConfig = useCallback(async (config: PlayerConfig) => {
+  const loadConfig = useCallback(async (config: PlayerConfig | null) => {
+    if (!config) return;
     await setPlayerConfig(config);
     if (config.weatherApiKey) setWeatherApiKey(config.weatherApiKey);
     if (config.weatherLocation) setWeatherLocation(config.weatherLocation);
@@ -79,7 +85,10 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
 
       // Connect Socket.io
       const socket = connectSocket(screenId, slug);
-      socket.on('playlist:update', loadConfig);
+      // playlist:update carries no payload — it's a signal to re-fetch from the server
+      socket.on('playlist:update', () =>
+        fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null)
+      );
       socket.on('alert:emergency', setAlert);
       socket.on('alert:clear', () => setAlert(null));
       socket.on('screen:reload', () => window.location.reload());
@@ -123,6 +132,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         orgSlug={orgSlug}
         weatherApiKey={weatherApiKey}
         weatherLocation={weatherLocation}
+        onVideoEnd={(zone) => engineRef.current?.tick(zone)}
       />
       <DebugOverlay state={engineState} screenId={screenId} orgSlug={orgSlug} visible={debug} />
     </>
