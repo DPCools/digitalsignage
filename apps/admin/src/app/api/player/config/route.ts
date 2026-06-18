@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
           textColor: activeAlert.textColor,
           screenIds: activeAlert.screenIds,
           isActive: activeAlert.isActive,
+          severity: activeAlert.severity as 'EMERGENCY' | 'WARNING' | 'INFO',
           expiresAt: activeAlert.expiresAt?.toISOString(),
         }
       : null,

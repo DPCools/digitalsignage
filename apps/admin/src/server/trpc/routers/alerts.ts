@@ -18,6 +18,7 @@ export const alertsRouter = router({
       message: z.string().min(1),
       backgroundColor: z.string().default('#FF0000'),
       textColor: z.string().default('#FFFFFF'),
+      severity: z.enum(['EMERGENCY', 'WARNING', 'INFO']).default('EMERGENCY'),
       screenIds: z.array(z.string()).default([]),
       expiresAt: z.string().datetime().optional(),
     }))
@@ -37,6 +38,7 @@ export const alertsRouter = router({
         id: alert.id, title: alert.title, message: alert.message,
         backgroundColor: alert.backgroundColor, textColor: alert.textColor,
         screenIds: alert.screenIds, isActive: true,
+        severity: alert.severity as EmergencyAlertConfig['severity'],
         expiresAt: alert.expiresAt?.toISOString(),
       };
 

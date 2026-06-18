@@ -1,6 +1,6 @@
 export type Zone = 'main' | 'ticker' | 'clock' | 'weather';
 
-export type ContentType = 'IMAGE' | 'VIDEO' | 'HTML_TEMPLATE' | 'RSS_FEED' | 'PDF';
+export type ContentType = 'IMAGE' | 'VIDEO' | 'HTML_TEMPLATE' | 'RSS_FEED' | 'PDF' | 'WEB_PAGE' | 'CCTV_GRID';
 export type TransitionType = 'FADE' | 'SLIDE_LEFT' | 'SLIDE_RIGHT' | 'ZOOM' | 'NONE';
 export type RecurrenceType = 'ONCE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 export type AlertSeverity = 'INFO' | 'WARNING' | 'EMERGENCY';

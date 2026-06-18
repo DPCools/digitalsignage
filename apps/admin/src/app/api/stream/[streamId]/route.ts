@@ -32,7 +32,11 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
-  if (!verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'))) {
+  // Accept token via Authorization header OR ?token= query param.
+  // The latter is needed because <img src> cannot set custom headers.
+  const tokenParam = req.nextUrl.searchParams.get('token');
+  const authHeader = req.headers.get('authorization') ?? (tokenParam ? `Bearer ${tokenParam}` : null);
+  if (!verifyPlayerToken(screenId, orgSlug, authHeader)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

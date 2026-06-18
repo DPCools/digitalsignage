@@ -30,9 +30,12 @@ async function copyText(text: string): Promise<void> {
 // ---------------------------------------------------------------------------
 type Tab = 'active' | 'templates' | 'apikeys';
 
+type AlertSeverity = 'EMERGENCY' | 'WARNING' | 'INFO';
+
 type TemplateFormState = {
   name: string; title: string; message: string;
   backgroundColor: string; textColor: string;
+  severity: AlertSeverity;
   targetType: 'ALL' | 'GROUPS' | 'SCREENS';
   targetGroupIds: string[]; targetScreenIds: string[];
   autoExpireMinutes: string;
@@ -41,6 +44,7 @@ type TemplateFormState = {
 const defaultTemplateForm = (): TemplateFormState => ({
   name: '', title: '', message: '',
   backgroundColor: '#FF0000', textColor: '#FFFFFF',
+  severity: 'EMERGENCY',
   targetType: 'ALL', targetGroupIds: [], targetScreenIds: [],
   autoExpireMinutes: '',
 });
@@ -81,6 +85,7 @@ function TemplateModal({
     const base = {
       name: form.name, title: form.title, message: form.message,
       backgroundColor: form.backgroundColor, textColor: form.textColor,
+      severity: form.severity,
       targetType: form.targetType,
       targetGroupIds: form.targetGroupIds,
       targetScreenIds: form.targetScreenIds,
@@ -106,7 +111,7 @@ function TemplateModal({
         <input placeholder="Alert title" value={form.title} onChange={(e) => set('title', e.target.value)}
           className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm" />
         <textarea placeholder="Alert message" value={form.message} onChange={(e) => set('message', e.target.value)}
-          rows={3} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm resize-none" />
+          rows={5} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm resize-none" />
 
         {/* Color pickers */}
         <div className="flex gap-4">
@@ -126,6 +131,27 @@ function TemplateModal({
               <span className="text-xs text-gray-400 font-mono">{form.textColor}</span>
             </div>
           </label>
+        </div>
+
+        {/* Severity */}
+        <div>
+          <span className="text-xs text-gray-400 block mb-2">Flash behaviour</span>
+          <div className="flex gap-3">
+            {([
+              { v: 'EMERGENCY', label: 'Fast flash', desc: '600ms — fire/evacuation' },
+              { v: 'WARNING', label: 'Slow flash', desc: '1.2s — caution' },
+              { v: 'INFO', label: 'No flash', desc: 'Solid — all clear / info' },
+            ] as const).map(({ v, label, desc }) => (
+              <label key={v} className={`flex-1 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                form.severity === v ? 'border-red-500 bg-red-950/30' : 'border-gray-700 hover:border-gray-500'
+              }`}>
+                <input type="radio" name="severity" checked={form.severity === v}
+                  onChange={() => set('severity', v)} className="sr-only" />
+                <p className="text-sm font-medium text-white">{label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              </label>
+            ))}
+          </div>
         </div>
 
         {/* Target type */}
@@ -289,6 +315,7 @@ export default function AlertsPage() {
   // ---- Tab 1 state
   const [adHocTitle, setAdHocTitle] = useState('');
   const [adHocMessage, setAdHocMessage] = useState('');
+  const [adHocSeverity, setAdHocSeverity] = useState<AlertSeverity>('EMERGENCY');
 
   // ---- Tab 2 state
   const [templateModal, setTemplateModal] = useState<{ open: boolean; editId?: string; initial: TemplateFormState }>({
@@ -305,7 +332,7 @@ export default function AlertsPage() {
   const { data: alerts, refetch: refetchAlerts } = trpc.alerts.list.useQuery();
   const active = trpc.alerts.getActive.useQuery();
   const createAlert = trpc.alerts.create.useMutation({
-    onSuccess: () => { refetchAlerts(); active.refetch(); setAdHocTitle(''); setAdHocMessage(''); },
+    onSuccess: () => { refetchAlerts(); active.refetch(); setAdHocTitle(''); setAdHocMessage(''); setAdHocSeverity('EMERGENCY'); },
   });
   const deactivate = trpc.alerts.deactivate.useMutation({
     onSuccess: () => { refetchAlerts(); active.refetch(); },
@@ -403,8 +430,23 @@ export default function AlertsPage() {
               autoComplete="off" className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm" />
             <textarea suppressHydrationWarning placeholder="Alert message" value={adHocMessage} onChange={(e) => setAdHocMessage(e.target.value)}
               rows={3} className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm resize-none" />
+            <div className="flex gap-2">
+              {([
+                { v: 'EMERGENCY', label: 'Fast flash' },
+                { v: 'WARNING', label: 'Slow flash' },
+                { v: 'INFO', label: 'No flash' },
+              ] as const).map(({ v, label }) => (
+                <label key={v} className={`flex items-center gap-1.5 cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  adHocSeverity === v ? 'border-red-500 bg-red-950/30 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                }`}>
+                  <input type="radio" name="adHocSeverity" checked={adHocSeverity === v}
+                    onChange={() => setAdHocSeverity(v)} className="sr-only" />
+                  {label}
+                </label>
+              ))}
+            </div>
             {createAlert.error && <p className="text-sm text-red-400">{createAlert.error.message}</p>}
-            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage })}
+            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage, severity: adHocSeverity })}
               disabled={!adHocTitle || !adHocMessage || createAlert.isPending}
               className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50">
               {createAlert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
@@ -440,7 +482,7 @@ export default function AlertsPage() {
             <div key={t.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4 flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="font-semibold text-white truncate">{t.name}</p>
-                <p className="text-sm text-gray-400 truncate">{t.title} — {t.message}</p>
+                <p className="text-sm text-gray-400 line-clamp-3">{t.title} — {t.message}</p>
                 <button
                   onClick={async () => { await copyText(t.id); }}
                   title="Copy template ID"
@@ -484,6 +526,7 @@ export default function AlertsPage() {
                     initial: {
                       name: t.name, title: t.title, message: t.message,
                       backgroundColor: t.backgroundColor, textColor: t.textColor,
+                      severity: (t.severity as AlertSeverity | undefined) ?? 'EMERGENCY',
                       targetType: t.targetType as 'ALL' | 'GROUPS' | 'SCREENS',
                       targetGroupIds: t.targetGroupIds, targetScreenIds: t.targetScreenIds,
                       autoExpireMinutes: t.autoExpireMinutes?.toString() ?? '',

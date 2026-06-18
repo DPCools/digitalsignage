@@ -134,27 +134,29 @@ model EmergencyAlert {
   /// Service layer must handle the case where the referenced template no longer exists.
   templateId      String?
   screenIds       String[]
-  isActive        Boolean   @default(true)
+  isActive        Boolean        @default(true)
+  severity        AlertSeverity  @default(EMERGENCY)
   expiresAt       DateTime?
   createdBy       String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model AlertTemplate {
-  id                String     @id @default(cuid())
+  id                String        @id @default(cuid())
   name              String
   title             String
   message           String
-  backgroundColor   String     @default("#FF0000")
-  textColor         String     @default("#FFFFFF")
-  targetType        TargetType @default(ALL)
+  backgroundColor   String        @default("#FF0000")
+  textColor         String        @default("#FFFFFF")
+  targetType        TargetType    @default(ALL)
   targetGroupIds    String[]
   targetScreenIds   String[]
   autoExpireMinutes Int?
+  severity          AlertSeverity @default(EMERGENCY)
   createdBy         String
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
 model ApiKey {
@@ -236,4 +238,10 @@ enum TargetType {
   ALL
   GROUPS
   SCREENS
+}
+
+enum AlertSeverity {
+  EMERGENCY
+  WARNING
+  INFO
 }

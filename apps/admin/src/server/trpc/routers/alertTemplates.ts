@@ -10,6 +10,7 @@ const templateInput = z.object({
   message: z.string().min(1),
   backgroundColor: z.string().default('#FF0000'),
   textColor: z.string().default('#FFFFFF'),
+  severity: z.enum(['EMERGENCY', 'WARNING', 'INFO']).default('EMERGENCY'),
   targetType: z.enum(['ALL', 'GROUPS', 'SCREENS']).default('ALL'),
   targetGroupIds: z.array(z.string()).default([]),
   targetScreenIds: z.array(z.string()).default([]),
@@ -121,6 +122,7 @@ export const alertTemplatesRouter = router({
             message: template.message,
             backgroundColor: template.backgroundColor,
             textColor: template.textColor,
+            severity: template.severity,
             templateId: template.id,
             screenIds,
             isActive: true,
@@ -141,6 +143,7 @@ export const alertTemplatesRouter = router({
         textColor: alert.textColor,
         screenIds: alert.screenIds,
         isActive: true,
+        severity: alert.severity as EmergencyAlertConfig['severity'],
         expiresAt: alert.expiresAt?.toISOString(),
       };
 

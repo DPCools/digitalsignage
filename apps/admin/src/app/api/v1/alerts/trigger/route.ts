@@ -117,6 +117,7 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
         message: template.message,
         backgroundColor: template.backgroundColor,
         textColor: template.textColor,
+        severity: template.severity,
         templateId: template.id,
         screenIds,
         isActive: true,
@@ -146,6 +147,7 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
     textColor: alert.textColor,
     screenIds: alert.screenIds,
     isActive: true,
+    severity: alert.severity as EmergencyAlertConfig['severity'],
     expiresAt: alert.expiresAt?.toISOString(),
   };
 
