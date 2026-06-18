@@ -32,6 +32,8 @@ const makeConfig = (
   activeAlert,
   timezone: 'UTC',
   locale: 'en',
+  groupId: null,
+  groupDefaultPlaylistId: null,
 });
 
 describe('resolveActivePlaylist', () => {

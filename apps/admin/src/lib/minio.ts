@@ -16,32 +16,52 @@ export function getMinio(): Minio.Client {
   return client;
 }
 
-// Extension is derived server-side from validated MIME type — never from user-supplied filename
+// Extension is derived server-side from validated MIME type — never from user-supplied filename.
+// All video formats are accepted because the upload pipeline transcodes to H.264 regardless.
 const MIME_TO_EXT: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'video/mp4': 'mp4',
-  'video/webm': 'webm',
+  // Images
+  'image/jpeg':      'jpg',
+  'image/png':       'png',
+  'image/webp':      'webp',
+  'image/gif':       'gif',
+  'image/avif':      'avif',
+  // Videos — broad list; ffmpeg transcodes all of these to H.264/AAC on ingest
+  'video/mp4':               'mp4',
+  'video/webm':              'webm',
+  'video/quicktime':         'mov',   // iPhone/Mac recordings
+  'video/x-msvideo':         'avi',
+  'video/x-matroska':        'mkv',
+  'video/x-ms-wmv':          'wmv',
+  'video/mpeg':              'mpeg',
+  'video/3gpp':              '3gp',
+  'video/x-flv':             'flv',
+  // Documents
   'application/pdf': 'pdf',
 };
 
 export const ALLOWED_MIMES = Object.keys(MIME_TO_EXT);
 
 export const MIME_TO_CONTENT_TYPE: Record<string, 'IMAGE' | 'VIDEO' | 'PDF'> = {
-  'image/jpeg': 'IMAGE',
-  'image/png': 'IMAGE',
-  'image/webp': 'IMAGE',
-  'image/gif': 'IMAGE',
-  'video/mp4': 'VIDEO',
-  'video/webm': 'VIDEO',
+  'image/jpeg':      'IMAGE',
+  'image/png':       'IMAGE',
+  'image/webp':      'IMAGE',
+  'image/gif':       'IMAGE',
+  'image/avif':      'IMAGE',
+  'video/mp4':               'VIDEO',
+  'video/webm':              'VIDEO',
+  'video/quicktime':         'VIDEO',
+  'video/x-msvideo':         'VIDEO',
+  'video/x-matroska':        'VIDEO',
+  'video/x-ms-wmv':          'VIDEO',
+  'video/mpeg':              'VIDEO',
+  'video/3gpp':              'VIDEO',
+  'video/x-flv':             'VIDEO',
   'application/pdf': 'PDF',
 };
 
 const MAX_SIZE: Record<string, number> = {
-  image: 50 * 1024 * 1024,
-  video: 2 * 1024 * 1024 * 1024,
+  image:       50  * 1024 * 1024,
+  video:       4   * 1024 * 1024 * 1024,  // 4 GB
   application: 100 * 1024 * 1024,
 };
 
@@ -50,7 +70,7 @@ export function getMaxSize(mimeType: string): number {
   return MAX_SIZE[category] ?? 50 * 1024 * 1024;
 }
 
-const VALID_KEY_RE = /^uploads\/[a-z0-9][a-z0-9-]*\/\d{13}-[0-9a-f-]{36}\.[a-z0-9]{2,4}$/;
+const VALID_KEY_RE = /^uploads\/[a-z0-9][a-z0-9-]*\/\d{13}-[0-9a-f-]{36}\.[a-z0-9]{2,5}$/;
 
 export async function getPresignedUploadUrl(
   orgSlug: string,
@@ -61,11 +81,14 @@ export async function getPresignedUploadUrl(
   const key = `uploads/${orgSlug}/${Date.now()}-${randomUUID()}.${ext}`;
   const minio = getMinio();
 
-  const url = await minio.presignedPutObject(
+  const rawUrl = await minio.presignedPutObject(
     process.env.MINIO_BUCKET!,
     key,
     15 * 60
   );
+  // Replace internal endpoint with public URL so the browser can reach it
+  const internalBase = `http${process.env.MINIO_USE_SSL === 'true' ? 's' : ''}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT ?? '9000'}`;
+  const url = rawUrl.replace(internalBase, process.env.MINIO_PUBLIC_URL!);
   return { url, key };
 }
 

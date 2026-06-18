@@ -1,4 +1,5 @@
 import { PrismaClient } from '../src/generated/public';
+import { provisionTenantSchema } from '../src/provision-tenant';
 import bcrypt from 'bcryptjs';
 
 const db = new PrismaClient();
@@ -22,6 +23,8 @@ async function main() {
       emailVerified: new Date(),
     },
   });
+
+  await provisionTenantSchema(org.slug, db);
 
   console.log('Seeded: admin@signflow.local / changeme');
 }

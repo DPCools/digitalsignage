@@ -11,17 +11,12 @@ function isScheduleActive(schedule: ScheduleConfig, now: Date): boolean {
     if (now > endDate) return false;
   }
 
-  // Check day of week
   if (schedule.daysOfWeek.length > 0 && !schedule.daysOfWeek.includes(now.getUTCDay())) {
     return false;
   }
 
-  // Check time window
   if (schedule.startTime || schedule.endTime) {
-    const hh = now.getUTCHours();
-    const mm = now.getUTCMinutes();
-    const currentMinutes = hh * 60 + mm;
-
+    const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
     if (schedule.startTime) {
       const [sh, sm] = schedule.startTime.split(':').map(Number);
       if (currentMinutes < sh * 60 + sm) return false;
@@ -35,23 +30,35 @@ function isScheduleActive(schedule: ScheduleConfig, now: Date): boolean {
   return true;
 }
 
+function scheduleTargetsScreen(schedule: ScheduleConfig, screenId: string, groupId: string | null): boolean {
+  // No targeting = broadcast to all screens
+  if (schedule.screenIds.length === 0 && schedule.groupIds.length === 0) return true;
+  if (schedule.screenIds.includes(screenId)) return true;
+  if (groupId && schedule.groupIds.includes(groupId)) return true;
+  return false;
+}
+
 export function resolveActivePlaylist(
   config: PlayerConfig,
   now: Date
 ): PlaylistConfig | null {
   const playlistMap = new Map(config.playlists.map((p) => [p.id, p]));
 
-  // Find all active schedules and sort by priority descending
+  // Find active schedules targeting this screen/group, sorted by priority descending
   const activeSchedules = config.schedules
-    .filter((s) => isScheduleActive(s, now))
+    .filter((s) => isScheduleActive(s, now) && scheduleTargetsScreen(s, config.screenId, config.groupId))
     .sort((a, b) => b.priority - a.priority);
 
-  // Return playlist for the highest-priority active schedule
   for (const schedule of activeSchedules) {
     const playlist = playlistMap.get(schedule.playlistId);
     if (playlist) return playlist;
   }
 
-  // Fallback to default playlist
+  // Fallback chain: group default → global default
+  if (config.groupDefaultPlaylistId) {
+    const groupDefault = playlistMap.get(config.groupDefaultPlaylistId);
+    if (groupDefault) return groupDefault;
+  }
+
   return config.playlists.find((p) => p.isDefault) ?? null;
 }

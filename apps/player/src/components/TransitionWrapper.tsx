@@ -34,5 +34,5 @@ export function TransitionWrapper({
     return () => { cancelAnimationFrame(outerRaf); cancelAnimationFrame(innerRaf); };
   }, [itemKey, transitionType]);
 
-  return <div className={`w-full h-full ${cls}`}>{children}</div>;
+  return <div className={`relative w-full h-full ${cls}`}>{children}</div>;
 }

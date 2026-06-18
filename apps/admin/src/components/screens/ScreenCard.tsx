@@ -1,5 +1,9 @@
-import Link from 'next/link';
+'use client';
+import { useState } from 'react';
 import { Monitor } from 'lucide-react';
+import { trpc } from '@/lib/trpc-client';
+import { useRouter } from 'next/navigation';
+import { PushUpdateButton } from './PushUpdateButton';
 
 interface Props {
   screen: {
@@ -8,15 +12,22 @@ interface Props {
     isOnline: boolean;
     lastHeartbeat: Date | null;
     lastSnapshot: string | null;
-    group: { name: string } | null;
+    group: { id: string; name: string } | null;
     orientation: string;
   };
 }
 
 export function ScreenCard({ screen }: Props) {
+  const router = useRouter();
+  const [editingGroup, setEditingGroup] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState(screen.group?.id ?? '');
+  const { data: groups } = trpc.screenGroups.list.useQuery(undefined, { enabled: editingGroup });
+  const update = trpc.screens.update.useMutation({
+    onSuccess: () => { setEditingGroup(false); router.refresh(); },
+  });
+
   function formatLastSeen(date: Date): string {
-    const diffMs = Date.now() - date.getTime();
-    const diffSec = Math.round(diffMs / 1000);
+    const diffSec = Math.round((Date.now() - date.getTime()) / 1000);
     const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
     if (diffSec < 30) return 'just now';
     if (diffSec < 3600) return rtf.format(-Math.round(diffSec / 60), 'minute');
@@ -25,10 +36,7 @@ export function ScreenCard({ screen }: Props) {
   const lastSeen = screen.lastHeartbeat ? formatLastSeen(screen.lastHeartbeat) : 'Never';
 
   return (
-    <Link
-      href={`/dashboard/screens/${screen.id}`}
-      className="group rounded-xl border border-gray-800 bg-gray-900 overflow-hidden hover:border-gray-600 transition-colors"
-    >
+    <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden hover:border-gray-600 transition-colors">
       <div className="aspect-video bg-gray-800 relative overflow-hidden">
         {screen.lastSnapshot ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -44,12 +52,41 @@ export function ScreenCard({ screen }: Props) {
           }`}
         />
       </div>
-      <div className="p-3">
-        <p className="font-medium text-sm text-white truncate">{screen.name}</p>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {screen.group?.name ?? 'No group'} · {lastSeen}
-        </p>
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium text-sm text-white truncate">{screen.name}</p>
+          <PushUpdateButton screenId={screen.id} />
+        </div>
+        {editingGroup ? (
+          <div className="flex gap-1.5">
+            <select
+              autoFocus
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="flex-1 rounded bg-gray-800 border border-gray-700 px-2 py-1 text-xs text-white"
+            >
+              <option value="">No group</option>
+              {groups?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <button
+              onClick={() => update.mutate({ id: screen.id, groupId: selectedGroupId || null })}
+              disabled={update.isPending}
+              className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {update.isPending ? '…' : 'Save'}
+            </button>
+            <button onClick={() => setEditingGroup(false)} className="text-xs text-gray-400 hover:text-white px-1">✕</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditingGroup(true)}
+            className="text-xs text-gray-500 hover:text-gray-300 transition-colors text-left w-full"
+            title="Click to assign group"
+          >
+            {screen.group?.name ?? 'No group'} · {lastSeen}
+          </button>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }

@@ -12,49 +12,53 @@ interface Props {
   orgSlug: string;
   weatherApiKey?: string;
   weatherLocation?: string;
+  onVideoEnd: (zone: Zone) => void;
 }
 
-export function ScreenLayout({ zones, screenId, orgSlug, weatherApiKey, weatherLocation }: Props) {
+export function ScreenLayout({ zones, screenId, orgSlug, weatherApiKey, weatherLocation, onVideoEnd }: Props) {
   const hasWeather = zones.weather.items.length > 0 || !!weatherApiKey;
   const hasTicker = zones.ticker.items.length > 0;
 
   return (
-    <div
-      className="w-screen h-screen overflow-hidden bg-black"
-      style={{
-        display: 'grid',
-        gridTemplateRows: hasTicker ? `1fr 3rem` : '1fr',
-        gridTemplateColumns: hasWeather ? '1fr auto' : '1fr',
-      }}
-    >
-      <div style={{ gridColumn: '1 / -1' }}>
+    <div className="relative w-screen h-screen overflow-hidden bg-black">
+
+      {/* Main zone — fills the entire screen */}
+      <div className="absolute inset-0">
         <ZoneErrorBoundary zone="main" screenId={screenId} orgSlug={orgSlug}>
-          <ZoneRenderer zone="main" state={zones.main} />
+          <ZoneRenderer zone="main" state={zones.main} onVideoEnd={() => onVideoEnd('main')} />
         </ZoneErrorBoundary>
       </div>
 
+      {/* Ticker — fixed bar at the bottom */}
       {hasTicker && (
-        <div style={{ gridColumn: '1 / -1' }} className="bg-black/80">
+        <div className="absolute bottom-0 left-0 right-0 h-12 bg-black/80 z-10">
           <ZoneErrorBoundary zone="ticker" screenId={screenId} orgSlug={orgSlug}>
             <ZoneRenderer zone="ticker" state={zones.ticker} />
           </ZoneErrorBoundary>
         </div>
       )}
 
+      {/* Weather — top-right overlay */}
       {hasWeather && (
-        <ZoneErrorBoundary zone="weather" screenId={screenId} orgSlug={orgSlug}>
-          <ZoneRenderer
-            zone="weather"
-            state={zones.weather}
-            weatherApiKey={weatherApiKey}
-            weatherLocation={weatherLocation}
-          />
-        </ZoneErrorBoundary>
+        <div className="absolute top-4 right-4 z-10">
+          <ZoneErrorBoundary zone="weather" screenId={screenId} orgSlug={orgSlug}>
+            <ZoneRenderer
+              zone="weather"
+              state={zones.weather}
+              weatherApiKey={weatherApiKey}
+              weatherLocation={weatherLocation}
+            />
+          </ZoneErrorBoundary>
+        </div>
       )}
 
-      <ZoneErrorBoundary zone="clock" screenId={screenId} orgSlug={orgSlug}>
-        <ZoneRenderer zone="clock" state={zones.clock} />
-      </ZoneErrorBoundary>
+      {/* Clock — top-left overlay */}
+      <div className="absolute top-4 left-4 z-10">
+        <ZoneErrorBoundary zone="clock" screenId={screenId} orgSlug={orgSlug}>
+          <ZoneRenderer zone="clock" state={zones.clock} />
+        </ZoneErrorBoundary>
+      </div>
+
     </div>
   );
 }

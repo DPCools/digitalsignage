@@ -12,9 +12,10 @@ interface Props {
   state: ZoneState;
   weatherApiKey?: string;
   weatherLocation?: string;
+  onVideoEnd?: () => void;
 }
 
-export function ZoneRenderer({ zone, state, weatherApiKey, weatherLocation }: Props) {
+export function ZoneRenderer({ zone, state, weatherApiKey, weatherLocation, onVideoEnd }: Props) {
   if (zone === 'clock') return <ClockWidget />;
 
   if (zone === 'weather') {
@@ -34,7 +35,7 @@ export function ZoneRenderer({ zone, state, weatherApiKey, weatherLocation }: Pr
       transitionType={state.currentItem.transition}
       itemKey={state.currentItem.id}
     >
-      <ContentPlayer item={state.currentItem} />
+      <ContentPlayer key={state.currentItem.id} item={state.currentItem} onVideoEnd={onVideoEnd} />
     </TransitionWrapper>
   );
 }

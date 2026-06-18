@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import {
   ALLOWED_MIMES, MIME_TO_CONTENT_TYPE, getMaxSize, getPresignedUploadUrl, getPublicUrl, getMinio
 } from '@/lib/minio';
+import { transcodeVideo } from '@/lib/transcode';
 
 function extractMinioKey(url: string): string | null {
   const base = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/`;
@@ -73,7 +74,7 @@ export const contentRouter = router({
       if (!type) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot determine content type from MIME' });
       }
-      return ctx.db.contentItem.create({
+      const item = await ctx.db.contentItem.create({
         data: {
           name: input.name,
           type,
@@ -85,6 +86,19 @@ export const contentRouter = router({
           status: process.env.CONTENT_APPROVAL_REQUIRED === 'true' ? 'PENDING' : 'APPROVED',
         },
       });
+
+      // Transcode videos to H.264 Baseline + faststart for TV/Pi compatibility.
+      // Runs in the background — returns the original URL immediately; screens get
+      // the transcoded URL on their next config poll (~5 min) or on next push.
+      if (type === 'VIDEO') {
+        const itemId = item.id;
+        const db = ctx.db;
+        transcodeVideo(input.key, process.env.MINIO_BUCKET!, (url) =>
+          db.contentItem.update({ where: { id: itemId }, data: { url } }).then(() => undefined)
+        );
+      }
+
+      return item;
     }),
 
   approve: adminProcedure
@@ -110,6 +124,9 @@ export const contentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const item = await ctx.db.contentItem.findUnique({ where: { id: input.id } });
       if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+      // Remove all FK references before deleting the content item
+      await ctx.db.playlistItem.deleteMany({ where: { contentItemId: input.id } });
+      await ctx.db.impression.deleteMany({ where: { contentItemId: input.id } });
       await ctx.db.contentItem.delete({ where: { id: input.id } });
       // Best-effort object cleanup — don't fail if object already gone
       try {

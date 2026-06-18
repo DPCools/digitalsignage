@@ -9,8 +9,10 @@ export function RegisterScreenModal() {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const { data: groups } = trpc.screenGroups.list.useQuery(undefined, { enabled: open });
   const register = trpc.screens.register.useMutation({
-    onSuccess: () => { setOpen(false); setCode(''); setName(''); router.refresh(); },
+    onSuccess: () => { setOpen(false); setCode(''); setName(''); setGroupId(''); router.refresh(); },
   });
 
   return (
@@ -42,6 +44,16 @@ export function RegisterScreenModal() {
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white"
             />
+            <select
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white"
+            >
+              <option value="">No group</option>
+              {groups?.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
             {register.error && (
               <p className="text-sm text-red-400">{register.error.message}</p>
             )}
@@ -53,7 +65,7 @@ export function RegisterScreenModal() {
                 Cancel
               </button>
               <button
-                onClick={() => register.mutate({ code, name })}
+                onClick={() => register.mutate({ code, name, groupId: groupId || undefined })}
                 disabled={code.length !== 6 || !name || register.isPending}
                 className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
               >

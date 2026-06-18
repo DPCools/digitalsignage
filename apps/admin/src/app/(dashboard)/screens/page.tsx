@@ -3,6 +3,7 @@ import { auth } from '@/server/auth';
 import { getTenantClient } from '@signflow/db';
 import { ScreenCard } from '@/components/screens/ScreenCard';
 import { RegisterScreenModal } from '@/components/screens/RegisterScreenModal';
+import { PushAllButton } from '@/components/screens/PushAllButton';
 
 export default async function ScreensPage() {
   const session = await auth();
@@ -15,9 +16,12 @@ export default async function ScreensPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Screens</h1>
-        <RegisterScreenModal />
+        <div className="flex items-center gap-2">
+          <PushAllButton screenIds={screens.map((s) => s.id)} />
+          <RegisterScreenModal />
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {screens.map((screen) => (

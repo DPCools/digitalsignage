@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import type { HeartbeatRequest } from '@signflow/types';
 import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
 import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {

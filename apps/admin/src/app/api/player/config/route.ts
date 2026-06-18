@@ -3,6 +3,16 @@ import { getTenantClient } from '@signflow/db';
 import type { PlayerConfig } from '@signflow/types';
 import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
+
 export async function GET(req: NextRequest) {
   const screenId = req.nextUrl.searchParams.get('screenId');
   const orgSlug = req.nextUrl.searchParams.get('orgSlug');
@@ -18,7 +28,11 @@ export async function GET(req: NextRequest) {
 
   const db = getTenantClient(orgSlug);
 
-  const [playlists, schedules, activeAlert] = await Promise.all([
+  const [screen, playlists, schedules, activeAlert] = await Promise.all([
+    db.screen.findUnique({
+      where: { id: screenId },
+      include: { group: { select: { id: true, defaultPlaylistId: true } } },
+    }),
     db.playlist.findMany({
       include: {
         items: { include: { contentItem: true }, orderBy: { position: 'asc' } },
@@ -34,6 +48,8 @@ export async function GET(req: NextRequest) {
   const config: PlayerConfig = {
     screenId,
     orgSlug,
+    groupId: screen?.groupId ?? null,
+    groupDefaultPlaylistId: screen?.group?.defaultPlaylistId ?? null,
     playlists: playlists.map((p) => ({
       id: p.id,
       name: p.name,
