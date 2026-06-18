@@ -8,7 +8,7 @@ import { emitToOrg, emitToScreen } from '@/server/socket';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   // Prevent the ?apiKey= query param from leaking via Referer on any redirects
   'Referrer-Policy': 'no-referrer',
@@ -18,18 +18,20 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-export async function POST(req: NextRequest) {
+async function handleTrigger(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
 
-  // Parse body (Axis units may send empty body)
+  // Parse body for POST (Axis units may send empty body; GET has no body)
   let body: { orgSlug?: string; templateId?: string } = {};
-  try {
-    const text = await req.text();
-    if (text.trim()) {
-      body = JSON.parse(text) as typeof body;
+  if (req.method === 'POST') {
+    try {
+      const text = await req.text();
+      if (text.trim()) {
+        body = JSON.parse(text) as typeof body;
+      }
+    } catch {
+      // ignore parse errors — treat as empty body
     }
-  } catch {
-    // ignore parse errors — treat as empty body
   }
 
   // Query params take precedence over body
@@ -158,3 +160,8 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, alertId: alert.id }, { headers: CORS });
 }
+
+// Both GET and POST are supported: GET for browser testing and Axis IO units
+// configured with GET; POST for standard API clients and Axis units using POST.
+export const GET = handleTrigger;
+export const POST = handleTrigger;
