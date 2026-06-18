@@ -6,6 +6,25 @@ import {
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
+// Clipboard helper — falls back to execCommand for non-HTTPS / Windows
+// ---------------------------------------------------------------------------
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch { /* fall through */ }
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 type Tab = 'active' | 'templates' | 'apikeys';
@@ -192,8 +211,8 @@ function NewKeyModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     onSuccess: (data) => { setRawKey(data.rawKey); onCreated(); },
   });
 
-  function handleCopy() {
-    navigator.clipboard.writeText(rawKey);
+  async function handleCopy() {
+    await copyText(rawKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -546,7 +565,7 @@ export default function AlertsPage() {
             </p>
             <div className="flex items-start gap-2 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5">
               <code className="flex-1 text-xs text-green-400 font-mono break-all">{exampleUrl}</code>
-              <button onClick={() => { navigator.clipboard.writeText(exampleUrl); setUrlCopied(true); setTimeout(() => setUrlCopied(false), 2000); }}
+              <button onClick={async () => { await copyText(exampleUrl); setUrlCopied(true); setTimeout(() => setUrlCopied(false), 2000); }}
                 className="shrink-0 text-gray-400 hover:text-white mt-0.5">
                 {urlCopied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
               </button>
