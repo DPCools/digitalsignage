@@ -1,36 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isIP } from 'net';
+import { promises as dns } from 'dns';
 import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 // ---------------------------------------------------------------------------
 // Security notes
 // ---------------------------------------------------------------------------
-// SSRF: Only http/https are permitted. Redirect chains are followed manually
-//   with per-hop validation: loopback addresses (127.x, ::1, localhost, 0.0.0.0)
-//   are blocked on every hop to prevent redirect-pivot to the local server.
-//   Private LAN IPs are allowed because the primary use case is internal
-//   dashboards on a signage LAN — admins are trusted to configure URLs.
+// SSRF: Only http/https are permitted. The initial URL and every redirect
+//   Location is checked via isBlockedHost() which:
+//     - Rejects loopback (127.0.0.0/8, ::1, 0.0.0.0), link-local /
+//       cloud-metadata (169.254.0.0/16, fe80::/10), and unspecified (::).
+//     - Handles literal IPv4 (incl. WHATWG-normalised decimal/hex) and IPv6
+//       (incl. ::ffff: mapped forms in both dotted and hex notation).
+//     - DNS-resolves hostnames and checks every returned address.
+//   Private LAN IPs (10/8, 172.16/12, 192.168/16) are intentionally allowed
+//   — the primary use case is internal dashboards on a signage LAN where the
+//   admin is trusted to configure URLs.
 //
-// Same-origin content injection: Proxied HTML is served from the admin origin.
-//   Mitigated by: (a) stream-token auth on every request, (b) CSP sandbox on
-//   the proxied response, (c) X-Content-Type-Options: nosniff.
-//   For production deployments handling sensitive admin sessions, serve this
-//   route from a dedicated subdomain (e.g. proxy.signage.example.com) so
-//   proxied pages cannot access admin cookies even if visited directly.
+// Same-origin content injection: mitigated by stream-token auth, CSP sandbox,
+//   and X-Content-Type-Options: nosniff on every proxied response. For
+//   production with sensitive admin sessions, serve from a dedicated subdomain.
 //
-// Token in URL: stream token appears in <iframe src> and access logs.
-//   Accepted tradeoff — iframes cannot set Authorization headers. Token is
-//   a short-lived time-windowed HMAC (10–20 min), not the long-lived bearer.
+// Token in URL: short-lived HMAC (10–20 min) — accepted tradeoff for iframes.
 // ---------------------------------------------------------------------------
 
-// Hostnames/IPs that must never be redirect destinations.
-// Private LAN IPs are intentionally NOT blocked — see SSRF note above.
-const LOOPBACK_RE = /^(127\.|0\.0\.0\.0$|::1$|localhost$)/i;
+// ---------------------------------------------------------------------------
+// IP range helpers — no third-party deps
+// ---------------------------------------------------------------------------
 
-function isLoopback(host: string): boolean {
-  return LOOPBACK_RE.test(host);
+function ipv4ToU32(ip: string): number {
+  return ip.split('.').reduce((n, o) => n * 256 + parseInt(o, 10), 0) >>> 0;
 }
 
-// Follow up to maxHops redirects, validating each destination.
+// Ranges blocked as source or redirect destination.
+// Private LAN ranges (10/8, 172.16/12, 192.168/16) intentionally omitted.
+const BLOCKED_V4: [number, number][] = [
+  [ipv4ToU32('0.0.0.0'),     ipv4ToU32('0.255.255.255')],   // 0.0.0.0/8     unspecified
+  [ipv4ToU32('127.0.0.0'),   ipv4ToU32('127.255.255.255')], // 127.0.0.0/8   loopback
+  [ipv4ToU32('169.254.0.0'), ipv4ToU32('169.254.255.255')], // 169.254.0.0/16 link-local / IMDS
+];
+
+function isBlockedIPv4(ip: string): boolean {
+  const n = ipv4ToU32(ip);
+  return BLOCKED_V4.some(([lo, hi]) => n >= lo && n <= hi);
+}
+
+function isBlockedIPv6(ip: string): boolean {
+  const n = ip.toLowerCase();
+  if (n === '::1' || n === '0:0:0:0:0:0:0:1') return true;  // loopback
+  if (n === '::' || n === '0:0:0:0:0:0:0:0') return true;   // unspecified
+  if (/^fe[89ab][0-9a-f]?:/i.test(n)) return true;           // fe80::/10 link-local
+
+  // ::ffff:x.x.x.x  — IPv4-mapped, dotted notation
+  const dotted = n.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return isBlockedIPv4(dotted[1]);
+
+  // ::ffff:xxxx:xxxx — IPv4-mapped, hex notation (e.g. ::ffff:7f00:1 = 127.0.0.1)
+  const hexMapped = n.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hexMapped) {
+    const hi = parseInt(hexMapped[1], 16);
+    const lo = parseInt(hexMapped[2], 16);
+    const v4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    return isBlockedIPv4(v4);
+  }
+
+  return false;
+}
+
+// Returns true if the host resolves to or IS a blocked address.
+async function isBlockedHost(hostname: string): Promise<boolean> {
+  // Strip IPv6 brackets inserted by the WHATWG URL parser
+  const h = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
+
+  const ipVer = isIP(h);
+  if (ipVer === 4) return isBlockedIPv4(h);
+  if (ipVer === 6) return isBlockedIPv6(h);
+
+  // Literal hostname aliases
+  if (/^localhost(\.localdomain)?$/i.test(h)) return true;
+
+  // DNS resolution — check every returned address
+  try {
+    const addrs = await dns.lookup(h, { all: true });
+    return addrs.some(({ address, family }) =>
+      family === 4 ? isBlockedIPv4(address) : isBlockedIPv6(address)
+    );
+  } catch {
+    return false; // DNS failure — the subsequent fetch will fail naturally
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Safe redirect follower
+// ---------------------------------------------------------------------------
+
 async function fetchWithSafeRedirects(
   startUrl: string,
   options: Omit<RequestInit, 'redirect'>,
@@ -60,8 +123,8 @@ async function fetchWithSafeRedirects(
     if (next.protocol !== 'http:' && next.protocol !== 'https:') {
       throw new Error(`Redirect to unsupported protocol: ${next.protocol}`);
     }
-    if (isLoopback(next.hostname)) {
-      throw new Error(`Redirect to loopback address blocked: ${next.hostname}`);
+    if (await isBlockedHost(next.hostname)) {
+      throw new Error(`Redirect to blocked address: ${next.hostname}`);
     }
 
     currentUrl = next.toString();
@@ -70,7 +133,10 @@ async function fetchWithSafeRedirects(
   throw new Error('Too many redirects');
 }
 
-// Build response headers: strip iframe-blocking headers, drop hop-by-hop headers.
+// ---------------------------------------------------------------------------
+// Response header helpers
+// ---------------------------------------------------------------------------
+
 function buildResponseHeaders(upstream: Headers, isHtml: boolean): Headers {
   const out = new Headers();
   for (const [key, value] of upstream.entries()) {
@@ -91,38 +157,35 @@ function buildResponseHeaders(upstream: Headers, isHtml: boolean): Headers {
     }
     out.set(key, value);
   }
-
   out.set('Cache-Control', 'no-store');
   out.set('X-Content-Type-Options', 'nosniff');
-
   if (isHtml) {
-    // Sandbox the proxied document so it cannot access admin cookies/storage
-    // if this URL is ever visited directly (not inside the player iframe).
     out.set(
       'Content-Security-Policy',
       'sandbox allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox'
     );
   }
-
   return out;
 }
 
-// Inject <base href="pageUrl"> so relative URLs in the proxied HTML
-// resolve to the original site rather than our admin origin.
 function injectBase(html: string, pageUrl: string): string {
   if (/<base[\s>]/i.test(html)) return html;
-  // Escape the URL for safe insertion into an HTML attribute
   const safe = pageUrl
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;');
   const tag = `<base href="${safe}">`;
   if (/<head[\s>]/i.test(html)) {
     return html.replace(/(<head[^>]*>)/i, `$1${tag}`);
   }
   return tag + html;
 }
+
+// ---------------------------------------------------------------------------
+// Route handler
+// ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -134,7 +197,6 @@ export async function GET(req: NextRequest) {
   if (!orgSlug || !screenId || !targetUrl) {
     return NextResponse.json({ error: 'Missing params' }, { status: 400 });
   }
-
   if (!isSafeOrgSlug(orgSlug) || !isSafeId(screenId)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
@@ -145,7 +207,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Validate URL — http/https only; loopback blocked
+  // Validate URL — http/https only; blocked ranges rejected
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(targetUrl);
@@ -155,11 +217,11 @@ export async function GET(req: NextRequest) {
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
     return NextResponse.json({ error: 'Unsupported protocol' }, { status: 400 });
   }
-  if (isLoopback(parsedUrl.hostname)) {
-    return NextResponse.json({ error: 'Loopback addresses not permitted' }, { status: 400 });
+  if (await isBlockedHost(parsedUrl.hostname)) {
+    return NextResponse.json({ error: 'URL not permitted' }, { status: 400 });
   }
 
-  // Strip inline credentials; send as Authorization header if present
+  // Strip inline credentials; pass as Authorization header if present
   let cleanTarget = targetUrl;
   const extraHeaders: HeadersInit = {};
   if (parsedUrl.username) {
@@ -211,11 +273,7 @@ export async function GET(req: NextRequest) {
 
   const html      = await upstream.text();
   const rewritten = injectBase(html, upstream.url);
-
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
 
-  return new NextResponse(rewritten, {
-    status: 200,
-    headers: responseHeaders,
-  });
+  return new NextResponse(rewritten, { status: 200, headers: responseHeaders });
 }
