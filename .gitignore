@@ -6,3 +6,8 @@ generated/
 .env.local
 *.log
 .turbo/
+*.tsbuildinfo
+next-env.d.ts
+apps/player/public/sw.js
+apps/player/public/swe-worker-*.js
+apps/player/public/workbox-*.js
