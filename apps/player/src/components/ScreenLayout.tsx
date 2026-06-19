@@ -12,10 +12,11 @@ interface Props {
   orgSlug: string;
   weatherApiKey?: string;
   weatherLocation?: string;
+  streamToken?: string;
   onVideoEnd: (zone: Zone) => void;
 }
 
-export function ScreenLayout({ zones, screenId, orgSlug, weatherApiKey, weatherLocation, onVideoEnd }: Props) {
+export function ScreenLayout({ zones, screenId, orgSlug, weatherApiKey, weatherLocation, streamToken, onVideoEnd }: Props) {
   const hasWeather = zones.weather.items.length > 0 || !!weatherApiKey;
   const hasTicker = zones.ticker.items.length > 0;
 
@@ -25,7 +26,7 @@ export function ScreenLayout({ zones, screenId, orgSlug, weatherApiKey, weatherL
       {/* Main zone — fills the entire screen */}
       <div className="absolute inset-0">
         <ZoneErrorBoundary zone="main" screenId={screenId} orgSlug={orgSlug}>
-          <ZoneRenderer zone="main" state={zones.main} onVideoEnd={() => onVideoEnd('main')} />
+          <ZoneRenderer zone="main" state={zones.main} screenId={screenId} orgSlug={orgSlug} streamToken={streamToken} onVideoEnd={() => onVideoEnd('main')} />
         </ZoneErrorBoundary>
       </div>
 

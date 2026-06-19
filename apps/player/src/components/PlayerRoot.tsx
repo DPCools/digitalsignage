@@ -24,12 +24,14 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
   const [orgSlug, setOrgSlug] = useState('');
   const [weatherApiKey, setWeatherApiKey] = useState<string | undefined>(undefined);
   const [weatherLocation, setWeatherLocation] = useState<string | undefined>(undefined);
+  const [streamToken, setStreamToken] = useState<string | undefined>(undefined);
 
   const loadConfig = useCallback(async (config: PlayerConfig | null) => {
     if (!config) return;
     await setPlayerConfig(config);
     if (config.weatherApiKey) setWeatherApiKey(config.weatherApiKey);
     if (config.weatherLocation) setWeatherLocation(config.weatherLocation);
+    if (config.playerStreamToken) setStreamToken(config.playerStreamToken);
     if (!engineRef.current) return;
     engineRef.current.load(config);
     if (config.activeAlert?.isActive) setAlert(config.activeAlert);
@@ -62,6 +64,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         engine.load(cached);
         if (cached.weatherApiKey) setWeatherApiKey(cached.weatherApiKey);
         if (cached.weatherLocation) setWeatherLocation(cached.weatherLocation);
+        if (cached.playerStreamToken) setStreamToken(cached.playerStreamToken);
       }
 
       // Fetch fresh config
@@ -132,6 +135,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         orgSlug={orgSlug}
         weatherApiKey={weatherApiKey}
         weatherLocation={weatherLocation}
+        streamToken={streamToken}
         onVideoEnd={(zone) => engineRef.current?.tick(zone)}
       />
       <DebugOverlay state={engineState} screenId={screenId} orgSlug={orgSlug} visible={debug} />
