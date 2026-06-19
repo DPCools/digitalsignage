@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@signflow/types'],
   // No Next.js image optimisation — player uses raw <img> tags for performance
   images: { unoptimized: true },
+  // Allow LAN devices (TV screens) to load _next/* assets in dev mode.
+  // In production this is irrelevant — the standalone server serves the same origin.
+  allowedDevOrigins: ['192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12'],
 };
 
 export default withPWA({
