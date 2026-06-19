@@ -10,12 +10,15 @@ import { TickerWidget } from './widgets/TickerWidget';
 interface Props {
   zone: Zone;
   state: ZoneState;
+  screenId?: string;
+  orgSlug?: string;
   weatherApiKey?: string;
   weatherLocation?: string;
+  streamToken?: string;
   onVideoEnd?: () => void;
 }
 
-export function ZoneRenderer({ zone, state, weatherApiKey, weatherLocation, onVideoEnd }: Props) {
+export function ZoneRenderer({ zone, state, screenId, orgSlug, weatherApiKey, weatherLocation, streamToken, onVideoEnd }: Props) {
   if (zone === 'clock') return <ClockWidget />;
 
   if (zone === 'weather') {
@@ -35,7 +38,14 @@ export function ZoneRenderer({ zone, state, weatherApiKey, weatherLocation, onVi
       transitionType={state.currentItem.transition}
       itemKey={state.currentItem.id}
     >
-      <ContentPlayer key={state.currentItem.id} item={state.currentItem} onVideoEnd={onVideoEnd} />
+      <ContentPlayer
+        key={state.currentItem.id}
+        item={state.currentItem}
+        screenId={screenId}
+        orgSlug={orgSlug}
+        streamToken={streamToken}
+        onVideoEnd={onVideoEnd}
+      />
     </TransitionWrapper>
   );
 }

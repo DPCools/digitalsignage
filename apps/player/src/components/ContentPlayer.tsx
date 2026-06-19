@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { PlaylistItemConfig } from '@signflow/types';
-import { getCachedAsset, getPlayerConfig } from '@/lib/db';
+import { getCachedAsset } from '@/lib/db';
 
 const VIDEO_ERROR_ADVANCE_MS = 4000;
 
@@ -45,25 +45,16 @@ interface CctvStream {
   label?: string;
 }
 
-function CctvGrid({ streams, contentItemId, fill, screenId, orgSlug }: {
+function CctvGrid({ streams, contentItemId, fill, screenId, orgSlug, streamToken }: {
   streams: CctvStream[];
   contentItemId: string;
   fill: React.CSSProperties;
   screenId: string;
   orgSlug: string;
+  streamToken?: string;
 }) {
-  const [token, setToken] = useState<string>('');
   const [offlineMap, setOfflineMap] = useState<Record<number, boolean>>({});
   const retryTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
-
-  // Load the short-lived stream token from cached player config on mount.
-  // playerStreamToken is a time-windowed HMAC (10-20 min validity) specifically
-  // for <img src> proxy URLs — never exposes the long-lived bearer token in URLs.
-  useEffect(() => {
-    getPlayerConfig().then((cfg) => {
-      if (cfg?.playerStreamToken) setToken(cfg.playerStreamToken);
-    });
-  }, []);
 
   // Clean up retry timers on unmount
   useEffect(() => {
@@ -96,8 +87,8 @@ function CctvGrid({ streams, contentItemId, fill, screenId, orgSlug }: {
       }}
     >
       {streams.map((stream, index) => {
-        const proxyUrl = token
-          ? `${ADMIN_BASE}/api/stream/${encodeURIComponent(contentItemId)}-${index}?orgSlug=${encodeURIComponent(orgSlug)}&screenId=${encodeURIComponent(screenId)}&token=${encodeURIComponent(token)}`
+        const proxyUrl = streamToken
+          ? `${ADMIN_BASE}/api/stream/${encodeURIComponent(contentItemId)}-${index}?orgSlug=${encodeURIComponent(orgSlug)}&screenId=${encodeURIComponent(screenId)}&token=${encodeURIComponent(streamToken)}`
           : null;
 
         return (
@@ -160,11 +151,13 @@ export function ContentPlayer({
   item,
   screenId,
   orgSlug,
+  streamToken,
   onVideoEnd,
 }: {
   item: PlaylistItemConfig;
   screenId?: string;
   orgSlug?: string;
+  streamToken?: string;
   onVideoEnd?: () => void;
 }) {
   const [src, setSrc] = useState(item.url);
@@ -279,6 +272,7 @@ export function ContentPlayer({
           fill={fill}
           screenId={screenId ?? ''}
           orgSlug={orgSlug ?? ''}
+          streamToken={streamToken}
         />
       );
     }
