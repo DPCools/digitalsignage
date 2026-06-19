@@ -11,10 +11,13 @@ const ADMIN_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 // WebPagePlayer — renders an iframe that auto-refreshes at a configured interval
 // ---------------------------------------------------------------------------
 
-function WebPagePlayer({ url, refreshSecs, fill }: {
+function WebPagePlayer({ url, refreshSecs, fill, orgSlug, screenId, streamToken }: {
   url: string;
   refreshSecs: number | null;
   fill: React.CSSProperties;
+  orgSlug?: string;
+  screenId?: string;
+  streamToken?: string;
 }) {
   const [key, setKey] = useState(0);
 
@@ -24,10 +27,21 @@ function WebPagePlayer({ url, refreshSecs, fill }: {
     return () => clearInterval(t);
   }, [refreshSecs]);
 
+  // Route through the admin proxy so X-Frame-Options / CSP frame-ancestors headers
+  // are stripped server-side. Without this, most sites refuse to load in an iframe.
+  const proxyUrl = (orgSlug && screenId && streamToken)
+    ? `${ADMIN_BASE}/api/proxy/page?url=${encodeURIComponent(url)}&orgSlug=${encodeURIComponent(orgSlug)}&screenId=${encodeURIComponent(screenId)}&token=${encodeURIComponent(streamToken)}`
+    : null;
+
+  if (!proxyUrl) {
+    // Blank while stream token initialises (usually < 1s after first config load)
+    return <div style={{ ...fill, background: '#000' }} />;
+  }
+
   return (
     <iframe
       key={key}
-      src={url}
+      src={proxyUrl}
       style={{ ...fill, border: 'none' }}
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
       title="web page"
@@ -260,7 +274,7 @@ export function ContentPlayer({
 
     case 'WEB_PAGE': {
       const refreshSecs = (item.metadata?.refreshInterval as number | null) ?? null;
-      return <WebPagePlayer url={item.url} refreshSecs={refreshSecs} fill={fill} />;
+      return <WebPagePlayer url={item.url} refreshSecs={refreshSecs} fill={fill} orgSlug={orgSlug} screenId={screenId} streamToken={streamToken} />;
     }
 
     case 'CCTV_GRID': {
