@@ -1,0 +1,21 @@
+{
+  "name": "signflow",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "turbo db:generate --filter=@signflow/db",
+    "db:migrate:public": "turbo db:migrate:public --filter=@signflow/db",
+    "db:seed": "turbo db:seed --filter=@signflow/db"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.4.0"
+  },
+  "engines": { "node": ">=20", "pnpm": ">=9" },
+  "packageManager": "pnpm@9.15.9"
+}

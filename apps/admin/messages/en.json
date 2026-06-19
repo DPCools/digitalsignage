@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "overview": "Overview",
+    "screens": "Screens",
+    "content": "Content",
+    "playlists": "Playlists",
+    "schedules": "Schedules",
+    "alerts": "Alerts",
+    "analytics": "Analytics",
+    "signOut": "Sign out"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "email": "Email",
+    "password": "Password",
+    "invalidCredentials": "Invalid email or password",
+    "noAccount": "No account?",
+    "registerOrg": "Register organisation",
+    "createOrg": "Create Organisation",
+    "creating": "Creating…",
+    "orgName": "Organisation name",
+    "yourName": "Your name",
+    "passwordMin": "Password (min 8 chars)"
+  },
+  "dashboard": {
+    "overview": "Overview",
+    "welcome": "Welcome",
+    "organisation": "Organisation"
+  },
+  "screens": {
+    "title": "Screens",
+    "registerScreen": "Register Screen",
+    "noScreens": "No screens registered yet. Click \"Register Screen\" to add one.",
+    "noGroup": "No group",
+    "never": "Never",
+    "registerTitle": "Register Screen",
+    "registerHint": "Enter the 6-digit code shown on the display.",
+    "codePlaceholder": "6-digit code (e.g. ABC123)",
+    "namePlaceholder": "Screen name",
+    "cancel": "Cancel",
+    "register": "Register",
+    "registering": "Registering…"
+  },
+  "content": {
+    "title": "Content Library",
+    "upload": "Upload"
+  },
+  "playlists": {
+    "title": "Playlists",
+    "contentLibrary": "Content Library",
+    "items": "{count, plural, one {# item} other {# items}}",
+    "clickToAdd": "Click items from the library to add them to this playlist."
+  },
+  "schedules": {
+    "title": "Schedules"
+  },
+  "alerts": {
+    "title": "Emergency Alerts",
+    "newAlert": "New Alert",
+    "deactivate": "Deactivate",
+    "inactive": "Inactive",
+    "createTitle": "Create Emergency Alert",
+    "sendAlert": "Send Alert",
+    "sending": "Sending…",
+    "titleLabel": "Title",
+    "messageLabel": "Message",
+    "cancel": "Cancel",
+    "templates": "Templates",
+    "apiKeys": "API Keys",
+    "activeAlert": "Active Alert",
+    "noActiveAlert": "No active alert",
+    "triggerTemplate": "Trigger",
+    "newTemplate": "New Template",
+    "newKey": "New API Key"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "totalImpressions": "Total impressions (30d)",
+    "topContent": "Top Content (30d)",
+    "contentId": "Content ID",
+    "plays": "Plays",
+    "totalTime": "Total time"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "notFound": "Not found"
+  }
+}

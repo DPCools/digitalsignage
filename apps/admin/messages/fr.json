@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "overview": "Vue d'ensemble",
+    "screens": "Écrans",
+    "content": "Contenu",
+    "playlists": "Playlists",
+    "schedules": "Plannings",
+    "alerts": "Alertes",
+    "analytics": "Analytiques",
+    "signOut": "Se déconnecter"
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signingIn": "Connexion…",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "invalidCredentials": "Adresse e-mail ou mot de passe invalide",
+    "noAccount": "Pas de compte ?",
+    "registerOrg": "Créer une organisation",
+    "createOrg": "Créer une organisation",
+    "creating": "Création…",
+    "orgName": "Nom de l'organisation",
+    "yourName": "Votre nom",
+    "passwordMin": "Mot de passe (min 8 caractères)"
+  },
+  "dashboard": {
+    "overview": "Vue d'ensemble",
+    "welcome": "Bienvenue",
+    "organisation": "Organisation"
+  },
+  "screens": {
+    "title": "Écrans",
+    "registerScreen": "Enregistrer un écran",
+    "noScreens": "Aucun écran enregistré. Cliquez sur « Enregistrer un écran » pour en ajouter un.",
+    "noGroup": "Sans groupe",
+    "never": "Jamais",
+    "registerTitle": "Enregistrer un écran",
+    "registerHint": "Entrez le code à 6 chiffres affiché sur l'écran.",
+    "codePlaceholder": "Code à 6 chiffres (ex. ABC123)",
+    "namePlaceholder": "Nom de l'écran",
+    "cancel": "Annuler",
+    "register": "Enregistrer",
+    "registering": "Enregistrement…"
+  },
+  "content": {
+    "title": "Bibliothèque de contenu",
+    "upload": "Importer"
+  },
+  "playlists": {
+    "title": "Playlists",
+    "contentLibrary": "Bibliothèque de contenu",
+    "items": "{count, plural, one {# élément} other {# éléments}}",
+    "clickToAdd": "Cliquez sur les éléments de la bibliothèque pour les ajouter à cette playlist."
+  },
+  "schedules": {
+    "title": "Plannings"
+  },
+  "alerts": {
+    "title": "Alertes d'urgence",
+    "newAlert": "Nouvelle alerte",
+    "deactivate": "Désactiver",
+    "inactive": "Inactif",
+    "createTitle": "Créer une alerte d'urgence",
+    "sendAlert": "Envoyer l'alerte",
+    "sending": "Envoi…",
+    "titleLabel": "Titre",
+    "messageLabel": "Message",
+    "cancel": "Annuler",
+    "templates": "Modèles",
+    "apiKeys": "Clés API",
+    "activeAlert": "Alerte active",
+    "noActiveAlert": "Aucune alerte active",
+    "triggerTemplate": "Déclencher",
+    "newTemplate": "Nouveau modèle",
+    "newKey": "Nouvelle clé API"
+  },
+  "analytics": {
+    "title": "Analytiques",
+    "totalImpressions": "Total des impressions (30j)",
+    "topContent": "Contenu le plus vu (30j)",
+    "contentId": "ID du contenu",
+    "plays": "Lectures",
+    "totalTime": "Temps total"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "loading": "Chargement…",
+    "error": "Une erreur est survenue",
+    "notFound": "Introuvable"
+  }
+}

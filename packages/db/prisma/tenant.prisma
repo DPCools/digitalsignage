@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/tenant"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("TENANT_DATABASE_URL")
+}
+
+model Screen {
+  id                String           @id @default(cuid())
+  name              String
+  uniqueCode        String           @unique
+  groupId           String?
+  group             ScreenGroup?     @relation(fields: [groupId], references: [id])
+  orientation       Orientation      @default(LANDSCAPE)
+  resolution        String?
+  tags              String[]
+  isOnline          Boolean          @default(false)
+  lastHeartbeat     DateTime?
+  lastSnapshot      String?
+  currentPlaylistId String?
+  currentPlaylist   Playlist?        @relation("CurrentScreenPlaylist", fields: [currentPlaylistId], references: [id])
+  heartbeats        ScreenHeartbeat[]
+  impressions       Impression[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model ScreenGroup {
+  id                String    @id @default(cuid())
+  name              String
+  type              GroupType @default(OTHER)
+  location          String?
+  description       String?
+  defaultPlaylistId String?
+  defaultPlaylist   Playlist? @relation("GroupDefaultPlaylist", fields: [defaultPlaylistId], references: [id])
+  screens           Screen[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model ContentItem {
+  id            String        @id @default(cuid())
+  name          String
+  type          ContentType
+  url           String
+  thumbnailUrl  String?
+  mimeType      String?
+  fileSize      Int?
+  duration      Int?
+  templateId    String?
+  template      Template?     @relation(fields: [templateId], references: [id])
+  metadata      Json?
+  status        ContentStatus @default(PENDING)
+  approvedBy    String?
+  uploadedBy    String
+  playlistItems PlaylistItem[]
+  impressions   Impression[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Template {
+  id           String        @id @default(cuid())
+  name         String
+  html         String
+  css          String?
+  variables    Json
+  thumbnail    String?
+  createdBy    String
+  contentItems ContentItem[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Playlist {
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  isDefault      Boolean        @default(false)
+  items          PlaylistItem[]
+  schedules      Schedule[]
+  currentScreens  Screen[]       @relation("CurrentScreenPlaylist")
+  defaultForGroups ScreenGroup[] @relation("GroupDefaultPlaylist")
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model PlaylistItem {
+  id            String         @id @default(cuid())
+  playlistId    String
+  playlist      Playlist       @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  contentItemId String
+  contentItem   ContentItem    @relation(fields: [contentItemId], references: [id])
+  position      Int
+  duration      Int
+  transition    TransitionType @default(FADE)
+  zone          String         @default("main")
+  createdAt     DateTime       @default(now())
+
+  @@unique([playlistId, position])
+}
+
+model Schedule {
+  id          String         @id @default(cuid())
+  playlistId  String
+  playlist    Playlist       @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  name        String?
+  startDate   DateTime
+  endDate     DateTime?
+  startTime   String?
+  endTime     String?
+  recurrence  RecurrenceType @default(ONCE)
+  daysOfWeek  Int[]
+  screenIds   String[]
+  groupIds    String[]
+  priority    Int            @default(0)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model EmergencyAlert {
+  id              String    @id @default(cuid())
+  title           String
+  message         String
+  backgroundColor String    @default("#FF0000")
+  textColor       String    @default("#FFFFFF")
+  /// Loose reference to AlertTemplate.id. No FK enforced — intentional so that
+  /// deleting a template does not cascade-delete historical alert records.
+  /// Service layer must handle the case where the referenced template no longer exists.
+  templateId      String?
+  screenIds       String[]
+  isActive        Boolean        @default(true)
+  severity        AlertSeverity  @default(EMERGENCY)
+  expiresAt       DateTime?
+  createdBy       String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model AlertTemplate {
+  id                String        @id @default(cuid())
+  name              String
+  title             String
+  message           String
+  backgroundColor   String        @default("#FF0000")
+  textColor         String        @default("#FFFFFF")
+  targetType        TargetType    @default(ALL)
+  targetGroupIds    String[]
+  targetScreenIds   String[]
+  autoExpireMinutes Int?
+  severity          AlertSeverity @default(EMERGENCY)
+  createdBy         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyPrefix  String    @unique
+  keyHash    String    @unique
+  createdBy  String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model ScreenHeartbeat {
+  id         String   @id @default(cuid())
+  screenId   String
+  screen     Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  timestamp  DateTime @default(now())
+  playlistId String?
+  contentId  String?
+}
+
+model Impression {
+  id            String      @id @default(cuid())
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id])
+  screenId      String
+  screen        Screen      @relation(fields: [screenId], references: [id])
+  playedAt      DateTime    @default(now())
+  durationMs    Int
+}
+
+enum GroupType {
+  SITE
+  LOCATION
+  DEPARTMENT
+  OTHER
+}
+
+enum Orientation {
+  LANDSCAPE
+  PORTRAIT
+}
+
+enum ContentType {
+  IMAGE
+  VIDEO
+  HTML_TEMPLATE
+  RSS_FEED
+  PDF
+  WEB_PAGE
+  CCTV_GRID
+}
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TransitionType {
+  FADE
+  SLIDE_LEFT
+  SLIDE_RIGHT
+  ZOOM
+  NONE
+}
+
+enum RecurrenceType {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum TargetType {
+  ALL
+  GROUPS
+  SCREENS
+}
+
+enum AlertSeverity {
+  EMERGENCY
+  WARNING
+  INFO
+}
