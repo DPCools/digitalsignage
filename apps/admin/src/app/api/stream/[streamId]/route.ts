@@ -126,7 +126,7 @@ export async function GET(
     return NextResponse.json({ error: 'Stream index out of range' }, { status: 404 });
   }
 
-  const rawUrl = streams[streamIndex].url;
+  const rawUrl = streams[streamIndex].url?.trim();
   if (!rawUrl) {
     return NextResponse.json({ error: 'Stream URL not configured' }, { status: 404 });
   }

@@ -145,7 +145,7 @@ export const contentRouter = router({
     .input(z.object({
       name: z.string().min(1),
       streams: z.array(z.object({
-        url: z.string().min(1).refine((u) => {
+        url: z.string().min(1).trim().refine((u) => {
           try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:'; }
           catch { return false; }
         }, { message: 'Stream URL must use http or https' }),
