@@ -191,6 +191,12 @@ model Impression {
   durationMs    Int
 }
 
+model OrgSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 enum GroupType {
   SITE
   LOCATION

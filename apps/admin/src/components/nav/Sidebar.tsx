@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Monitor, Image, ListVideo, Calendar, AlertTriangle,
-  BarChart2, LayoutDashboard, LogOut, Layers,
+  BarChart2, LayoutDashboard, LogOut, Layers, Settings,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 
@@ -16,6 +16,7 @@ const nav = [
   { href: '/schedules', label: 'Schedules', icon: Calendar },
   { href: '/alerts', label: 'Alerts', icon: AlertTriangle },
   { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {

@@ -10,6 +10,7 @@ import { alertsRouter } from './routers/alerts';
 import { alertTemplatesRouter } from './routers/alertTemplates';
 import { analyticsRouter } from './routers/analytics';
 import { apiKeysRouter } from './routers/apiKeys';
+import { settingsRouter } from './routers/settings';
 
 export const appRouter = router({
   orgs: orgsRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   alertTemplates: alertTemplatesRouter,
   analytics: analyticsRouter,
   apiKeys: apiKeysRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;
