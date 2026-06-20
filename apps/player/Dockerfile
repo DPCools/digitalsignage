@@ -19,9 +19,10 @@ FROM node:20-alpine AS runner
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+RUN apk add --no-cache curl
 COPY --from=builder --chown=nextjs:nodejs /app/apps/player/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/player/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/player/.next/static ./apps/player/.next/static
 USER nextjs
 EXPOSE 3001
 ENV PORT=3001 HOSTNAME="0.0.0.0"
-CMD ["node", "server.js"]
+CMD ["node", "apps/player/server.js"]

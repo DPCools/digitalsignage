@@ -66,6 +66,19 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-signflow-secret}
     networks: [signflow_net]
 
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://signflow:${POSTGRES_PASSWORD:-secret}@postgres:5432/signflow
+    restart: on-failure
+    networks: [signflow_net]
+
   admin:
     build:
       context: ..
@@ -78,6 +91,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file: ../.env
     environment:
       DATABASE_URL: postgresql://signflow:${POSTGRES_PASSWORD:-secret}@postgres:5432/signflow
