@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { getTenantClient } from '@signflow/db';
 import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
@@ -74,16 +74,30 @@ async function fetchCamera(
 
 // Transcode an RTSP stream to MJPEG using FFmpeg.
 // FFmpeg's mpjpeg muxer outputs multipart/x-mixed-replace with boundary "ffmpeg".
+//
+// Security note — credentials in argv:
+// FFmpeg's RTSP handler reads auth exclusively from the URL; there is no
+// separate credential flag (e.g. -rtsp_user / -rtsp_pass) that keeps the
+// secret out of the process argv. To avoid embedding the raw URL in this
+// process's spawn() args array (which appears in code audit and error logs),
+// we pass the full URL via an environment variable (SF_RTSP_URL) and let
+// the shell expand it. This means the /bin/sh process argv contains only a
+// template string — no credentials. After `exec`, the shell is replaced by
+// ffmpeg whose argv will contain the expanded URL (unavoidable with FFmpeg
+// RTSP auth). The ffmpeg process is short-lived: it dies the moment the
+// client disconnects. Credentials in ffmpeg's argv are readable only by
+// processes with the same OS user or root.
 function streamRtsp(rtspUrl: string): NextResponse {
-  const ffmpeg = spawn('/usr/bin/ffmpeg', [
-    '-loglevel', 'quiet',
-    '-rtsp_transport', 'tcp',       // TCP avoids UDP packet loss on LAN
-    '-i', rtspUrl,
-    '-f', 'mpjpeg',                 // outputs multipart/x-mixed-replace
-    '-q:v', '5',                    // JPEG quality (1=best, 31=worst)
-    '-r', '15',                     // 15 fps
-    'pipe:1',
-  ], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const ffmpeg = spawn('/bin/sh', [
+    '-c',
+    'exec /usr/bin/ffmpeg -loglevel quiet -rtsp_transport tcp -i "$SF_RTSP_URL" -f mpjpeg -q:v 5 -r 15 pipe:1',
+  ], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: {
+      ...process.env,
+      SF_RTSP_URL: rtspUrl,
+    },
+  }) as unknown as ChildProcess;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
