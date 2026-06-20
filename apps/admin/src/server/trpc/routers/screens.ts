@@ -10,6 +10,48 @@ export const screensRouter = router({
     })
   ),
 
+  health: tenantProcedure.query(async ({ ctx }) => {
+    const screens = await ctx.db.screen.findMany({
+      include: {
+        group:           { select: { name: true } },
+        currentPlaylist: { select: { name: true } },
+        heartbeats: {
+          take: 1,
+          orderBy: { timestamp: 'desc' },
+          select: { contentId: true, timestamp: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Batch-fetch content item names for whatever is currently playing
+    const contentIds = [
+      ...new Set(
+        screens.map((s) => s.heartbeats[0]?.contentId).filter((id): id is string => !!id)
+      ),
+    ];
+    const contentItems = contentIds.length
+      ? await ctx.db.contentItem.findMany({
+          where: { id: { in: contentIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const contentMap = Object.fromEntries(contentItems.map((c) => [c.id, c.name]));
+
+    return screens.map((s) => ({
+      id:              s.id,
+      name:            s.name,
+      group:           s.group?.name ?? null,
+      orientation:     s.orientation,
+      lastHeartbeat:   s.lastHeartbeat,
+      lastSnapshot:    s.lastSnapshot,
+      currentPlaylist: s.currentPlaylist?.name ?? null,
+      currentContent:  s.heartbeats[0]?.contentId
+        ? (contentMap[s.heartbeats[0].contentId] ?? null)
+        : null,
+    }));
+  }),
+
   get: tenantProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
