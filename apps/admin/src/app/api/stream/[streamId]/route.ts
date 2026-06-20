@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
+import { spawn } from 'child_process';
 import { getTenantClient } from '@signflow/db';
 import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
@@ -71,6 +72,46 @@ async function fetchCamera(
   }
 }
 
+// Transcode an RTSP stream to MJPEG using FFmpeg.
+// FFmpeg's mpjpeg muxer outputs multipart/x-mixed-replace with boundary "ffmpeg".
+function streamRtsp(rtspUrl: string): NextResponse {
+  const ffmpeg = spawn('/usr/bin/ffmpeg', [
+    '-loglevel', 'quiet',
+    '-rtsp_transport', 'tcp',       // TCP avoids UDP packet loss on LAN
+    '-i', rtspUrl,
+    '-f', 'mpjpeg',                 // outputs multipart/x-mixed-replace
+    '-q:v', '5',                    // JPEG quality (1=best, 31=worst)
+    '-r', '15',                     // 15 fps
+    'pipe:1',
+  ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      ffmpeg.stdout!.on('data', (chunk: Buffer) => {
+        try { controller.enqueue(new Uint8Array(chunk)); } catch { /* stream closed */ }
+      });
+      ffmpeg.stdout!.on('end', () => {
+        try { controller.close(); } catch { /* already closed */ }
+      });
+      ffmpeg.on('error', () => {
+        try { controller.close(); } catch { /* already closed */ }
+      });
+    },
+    cancel() {
+      try { ffmpeg.kill('SIGKILL'); } catch { /* already dead */ }
+    },
+  });
+
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'multipart/x-mixed-replace;boundary=ffmpeg',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ streamId: string }> }
@@ -131,28 +172,33 @@ export async function GET(
     return NextResponse.json({ error: 'Stream URL not configured' }, { status: 404 });
   }
 
-  // Parse and validate the camera URL, stripping inline credentials
-  let cleanUrl: string;
-  let username: string | null = null;
-  let password: string | null = null;
-
+  // Parse the URL to extract credentials, then dispatch to the right handler.
+  let parsedUrl: URL;
   try {
-    const u = new URL(rawUrl);
-
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return NextResponse.json({ error: 'Unsupported camera protocol' }, { status: 400 });
-    }
-
-    if (u.username) {
-      username = decodeURIComponent(u.username);
-      password = decodeURIComponent(u.password);
-    }
-    u.username = '';
-    u.password = '';
-    cleanUrl = u.toString();
+    parsedUrl = new URL(rawUrl);
   } catch {
     return NextResponse.json({ error: 'Invalid stream URL' }, { status: 400 });
   }
+
+  const username = parsedUrl.username ? decodeURIComponent(parsedUrl.username) : null;
+  const password = parsedUrl.username ? decodeURIComponent(parsedUrl.password) : null;
+
+  // ── RTSP path ──────────────────────────────────────────────────────────────
+  // Transcode RTSP streams to MJPEG via FFmpeg; the proxy serves the output as
+  // multipart/x-mixed-replace so the player's <img> tag can display live video.
+  if (parsedUrl.protocol === 'rtsp:' || parsedUrl.protocol === 'rtsps:') {
+    return streamRtsp(rawUrl);  // rawUrl includes embedded credentials for ffmpeg
+  }
+
+  // ── HTTP/HTTPS path ─────────────────────────────────────────────────────────
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return NextResponse.json({ error: 'Unsupported camera protocol' }, { status: 400 });
+  }
+
+  // Strip credentials from URL before fetching (sent via Authorization header instead)
+  parsedUrl.username = '';
+  parsedUrl.password = '';
+  const cleanUrl = parsedUrl.toString();
 
   // Build the initial auth header (Basic if credentials provided)
   const basicAuth = username

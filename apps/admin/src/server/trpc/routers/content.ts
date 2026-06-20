@@ -146,9 +146,13 @@ export const contentRouter = router({
       name: z.string().min(1),
       streams: z.array(z.object({
         url: z.string().min(1).trim().refine((u) => {
-          try { const p = new URL(u); return p.protocol === 'http:' || p.protocol === 'https:'; }
+          try {
+            const p = new URL(u);
+            return p.protocol === 'http:' || p.protocol === 'https:' ||
+                   p.protocol === 'rtsp:' || p.protocol === 'rtsps:';
+          }
           catch { return false; }
-        }, { message: 'Stream URL must use http or https' }),
+        }, { message: 'Stream URL must use http, https, rtsp, or rtsps' }),
         label: z.string().optional(),
       })).min(1).max(4),
       duration: z.number().int().min(1).default(30),
