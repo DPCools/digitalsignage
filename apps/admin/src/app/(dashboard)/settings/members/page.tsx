@@ -206,15 +206,18 @@ export default function MembersPage() {
                     <div className="text-xs text-gray-500">{user.email}</div>
                   </td>
                   <td className="px-6 py-3">
-                    <select
-                      value={user.role}
-                      onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value as OrgRole })}
-                      className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
-                    >
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                      ))}
-                    </select>
+                    <div className="flex flex-col">
+                      <select
+                        value={user.role}
+                        onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value as OrgRole })}
+                        className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
+                      >
+                        {ROLE_OPTIONS.map((r) => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">Role changes take effect on next login</p>
+                    </div>
                   </td>
                   <td className="px-6 py-3 text-xs text-gray-500">{formatDate(user.createdAt)}</td>
                   <td className="px-6 py-3 text-right">
