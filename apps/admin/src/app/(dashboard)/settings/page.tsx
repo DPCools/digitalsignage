@@ -25,12 +25,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-gray-400 mt-1">Organisation-wide configuration</p>
-      </div>
-
+    <div className="max-w-2xl space-y-4">
       <section className="rounded-xl border border-gray-800 bg-gray-900 divide-y divide-gray-800">
         {/* Section header */}
         <div className="px-6 py-4 flex items-center gap-2">
