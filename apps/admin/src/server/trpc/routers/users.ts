@@ -10,7 +10,7 @@ export const usersRouter = router({
   list: adminProcedure.query(async ({ ctx }) => {
     const [users, invites] = await Promise.all([
       ctx.publicDb.user.findMany({
-        where: { orgId: ctx.session.user.orgId },
+        where: { orgId: ctx.session.user.orgId, role: { not: 'SUPER_ADMIN' } },
         select: { id: true, email: true, name: true, role: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
@@ -90,6 +90,9 @@ export const usersRouter = router({
         where: { id: input.userId, orgId: ctx.session.user.orgId },
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (user.role === 'SUPER_ADMIN') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot modify a super admin' });
+      }
       if (user.id === ctx.session.user.id) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot change your own role' });
       }
@@ -118,6 +121,9 @@ export const usersRouter = router({
         where: { id: input.userId, orgId: ctx.session.user.orgId },
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (user.role === 'SUPER_ADMIN') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove a super admin' });
+      }
       if (user.id === ctx.session.user.id) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot remove yourself' });
       }

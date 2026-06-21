@@ -5,10 +5,15 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Public paths — no auth required
+  // All /api routes bypass NextAuth here because:
+  // - tRPC procedures re-enforce auth internally via protectedProcedure/adminProcedure
+  // - /api/invite/[token] and /api/orgs/register are intentionally public
+  // - /api/auth/* is required for NextAuth callbacks
+  // Any future /api route without in-handler auth will be silently unprotected.
   if (
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/invite') ||
+    pathname.startsWith('/invite/') ||
     pathname === '/favicon.ico'
   ) {
     return NextResponse.next();
