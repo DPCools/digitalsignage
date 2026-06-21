@@ -198,6 +198,19 @@ model OrgSetting {
   updatedAt DateTime @updatedAt
 }
 
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  actorId    String
+  actorName  String
+  targetId   String?
+  targetName String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}
+
 enum GroupType {
   SITE
   LOCATION

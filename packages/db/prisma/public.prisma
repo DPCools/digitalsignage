@@ -15,6 +15,7 @@ model Organization {
   slug      String   @unique
   plan      Plan     @default(FREE)
   users     User[]
+  invites   Invite[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -40,6 +41,20 @@ model PairingCode {
   screenId  String?
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Invite {
+  id        String       @id @default(cuid())
+  token     String       @unique
+  email     String
+  name      String?
+  role      Role         @default(VIEWER)
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
 }
 
 enum Role {
