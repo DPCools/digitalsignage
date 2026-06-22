@@ -1,7 +1,8 @@
 'use client';
 import { useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { Upload, Loader2, Trash2, Globe, Camera, X, Plus } from 'lucide-react';
+import { Upload, Loader2, Trash2, Globe, Camera, X, Plus, Eye } from 'lucide-react';
+import { ContentPreviewModal } from '@/components/content/ContentPreviewModal';
 
 type DeleteTarget = { ids: string[]; label: string };
 
@@ -260,6 +261,7 @@ export default function ContentPage() {
   const [deleting, setDeleting] = useState(false);
   const [showWebPageModal, setShowWebPageModal] = useState(false);
   const [showCctvModal, setShowCctvModal] = useState(false);
+  const [previewItem, setPreviewItem] = useState<ContentItemRow | null>(null);
 
   const { data, refetch } = trpc.content.list.useQuery({}, {
     refetchInterval: (query: { state: { data?: { items: Array<{ type: string; url: string }> } } }) =>
@@ -445,16 +447,25 @@ export default function ContentPage() {
                     {item.type.toLowerCase().replace('_', ' ')}
                   </p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteTarget({ ids: [item.id], label: `"${item.name}"` });
-                  }}
-                  title="Delete"
-                  className="shrink-0 rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewItem(item); }}
+                    title="Preview"
+                    className="rounded p-1 text-gray-600 hover:text-blue-400 hover:bg-gray-800 transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ ids: [item.id], label: `"${item.name}"` });
+                    }}
+                    title="Delete"
+                    className="rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -515,6 +526,14 @@ export default function ContentPage() {
         <CctvGridModal
           onClose={() => setShowCctvModal(false)}
           onSaved={() => { refetch(); setShowCctvModal(false); }}
+        />
+      )}
+
+      {/* Content preview modal */}
+      {previewItem && (
+        <ContentPreviewModal
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
         />
       )}
     </div>
