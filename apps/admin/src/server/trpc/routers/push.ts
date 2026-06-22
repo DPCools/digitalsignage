@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../init';
 import { publicClient } from '@signflow/db';
 
@@ -10,6 +11,13 @@ export const pushRouter = router({
       auth: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await publicClient.pushSubscription.findUnique({
+        where: { endpoint: input.endpoint },
+        select: { userId: true },
+      });
+      if (existing && existing.userId !== ctx.session!.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
       await publicClient.pushSubscription.upsert({
         where: { endpoint: input.endpoint },
         update: { p256dh: input.p256dh, auth: input.auth },
