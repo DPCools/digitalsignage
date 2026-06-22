@@ -17,6 +17,7 @@ type ContentItemRow = {
   fileSize: number | null;
   duration: number | null;
   status: string;
+  expiresAt: Date | null;
   createdAt: Date;
 };
 
@@ -446,6 +447,13 @@ export default function ContentPage() {
                   <p className="text-xs text-gray-500 capitalize">
                     {item.type.toLowerCase().replace('_', ' ')}
                   </p>
+                  {item.expiresAt && (
+                    <p className={`text-[10px] font-medium mt-0.5 ${new Date(item.expiresAt) < new Date() ? 'text-red-400' : 'text-yellow-400'}`}>
+                      {new Date(item.expiresAt) < new Date()
+                        ? 'Expired'
+                        : `Expires ${new Date(item.expiresAt).toLocaleDateString()}`}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
@@ -534,6 +542,7 @@ export default function ContentPage() {
         <ContentPreviewModal
           item={previewItem}
           onClose={() => setPreviewItem(null)}
+          onUpdated={() => refetch()}
         />
       )}
     </div>

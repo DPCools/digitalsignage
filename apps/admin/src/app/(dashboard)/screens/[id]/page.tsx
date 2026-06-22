@@ -59,6 +59,7 @@ export default async function ScreenDetailPage({
   if (!screen) notFound();
 
   const online = isOnline(screen.lastHeartbeat);
+  const snapshotV = screen.lastSnapshot?.match(/[?&]v=(\d+)/)?.[1] ?? null;
 
   // Resolve content names from the heartbeat contentIds
   const contentIds = [...new Set(screen.heartbeats.map((h) => h.contentId).filter(Boolean))] as string[];
@@ -102,8 +103,11 @@ export default async function ScreenDetailPage({
         {/* Snapshot viewer */}
         <div className="lg:col-span-2">
           <SnapshotViewer
-            initialUrl={screen.lastSnapshot}
+            initialUrl={screen.lastSnapshot
+              ? `/api/admin/snapshot?screenId=${encodeURIComponent(id)}${snapshotV ? `&v=${snapshotV}` : ''}`
+              : null}
             screenName={screen.name}
+            screenId={id}
           />
         </div>
 

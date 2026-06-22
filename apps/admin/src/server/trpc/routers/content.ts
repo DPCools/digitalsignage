@@ -119,6 +119,22 @@ export const contentRouter = router({
       })
     ),
 
+  setExpiry: adminProcedure
+    .input(z.object({
+      id: z.string(),
+      expiresAt: z.string().datetime().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.contentItem.findFirst({
+        where: { id: input.id },
+      });
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+      return ctx.db.contentItem.update({
+        where: { id: input.id },
+        data: { expiresAt: input.expiresAt ? new Date(input.expiresAt) : null },
+      });
+    }),
+
   createWebPage: adminProcedure
     .input(z.object({
       name: z.string().min(1),
@@ -128,6 +144,7 @@ export const contentRouter = router({
       ),
       refreshInterval: z.number().int().min(1).nullable(),
       duration: z.number().int().min(1).default(30),
+      expiresAt: z.string().datetime().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.contentItem.create({
@@ -140,6 +157,7 @@ export const contentRouter = router({
           duration: input.duration,
           fileSize: null,
           uploadedBy: ctx.session.user.id,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
         },
       });
     }),
@@ -159,6 +177,7 @@ export const contentRouter = router({
         label: z.string().optional(),
       })).min(1).max(4),
       duration: z.number().int().min(1).default(30),
+      expiresAt: z.string().datetime().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.contentItem.create({
@@ -171,6 +190,7 @@ export const contentRouter = router({
           duration: input.duration,
           fileSize: null,
           uploadedBy: ctx.session.user.id,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
         },
       });
     }),

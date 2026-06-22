@@ -16,6 +16,39 @@ export function getMinio(): Minio.Client {
   return client;
 }
 
+let policyApplied = false;
+
+// Ensures only uploads/* is publicly readable.
+// snapshots/* must NOT be public — they may contain CCTV frames or sensitive
+// screen content. Serve them via /api/admin/snapshot which enforces session auth.
+export async function ensureBucketPolicy(): Promise<void> {
+  if (policyApplied) return;
+  policyApplied = true;
+  try {
+    const bucket = process.env.MINIO_BUCKET!;
+    const policy = JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: { AWS: ['*'] },
+          Action: ['s3:GetObject'],
+          Resource: [`arn:aws:s3:::${bucket}/uploads/*`],
+        },
+      ],
+    });
+    await getMinio().setBucketPolicy(bucket, policy);
+  } catch (err) {
+    console.error('[minio] failed to set bucket policy:', err);
+  }
+}
+
+export function snapshotUrlToKey(url: string): string | null {
+  const base = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/`;
+  if (!url.startsWith(base)) return null;
+  return decodeURIComponent(url.slice(base.length).split('?')[0]);
+}
+
 // Extension is derived server-side from validated MIME type — never from user-supplied filename.
 // All video formats are accepted because the upload pipeline transcodes to H.264 regardless.
 const MIME_TO_EXT: Record<string, string> = {

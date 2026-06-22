@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
-import { getMinio } from '@/lib/minio';
+import { getMinio, ensureBucketPolicy } from '@/lib/minio';
 import type { SnapshotRequest } from '@signflow/types';
 import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
@@ -30,12 +30,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Snapshot too large' }, { status: 413 });
   }
 
-  const buffer = Buffer.from(body.imageBase64, 'base64');
-  const key = `snapshots/${body.orgSlug}/${body.screenId}.png`;
-  const minio = getMinio();
-  await minio.putObject(process.env.MINIO_BUCKET!, key, buffer, buffer.length, { 'Content-Type': 'image/png' });
+  await ensureBucketPolicy();
 
-  const url = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${key}`;
+  const buffer = Buffer.from(body.imageBase64, 'base64');
+  // Detect JPEG vs PNG from magic bytes so either format works
+  const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8;
+  const ext = isJpeg ? 'jpg' : 'png';
+  const mime = isJpeg ? 'image/jpeg' : 'image/png';
+  const key = `snapshots/${body.orgSlug}/${body.screenId}.${ext}`;
+  const minio = getMinio();
+  await minio.putObject(process.env.MINIO_BUCKET!, key, buffer, buffer.length, { 'Content-Type': mime });
+
+  // ?v= version stamp ensures lastSnapshot changes on every upload so the admin
+  // UI's proxy URL cache-key changes and the browser re-fetches the new image.
+  const url = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${key}?v=${Date.now()}`;
   const db = getTenantClient(body.orgSlug);
   await db.screen.update({ where: { id: body.screenId }, data: { lastSnapshot: url } });
 

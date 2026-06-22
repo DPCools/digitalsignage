@@ -35,6 +35,7 @@ export function ScreenCard({ screen }: Props) {
     return rtf.format(-Math.round(diffSec / 3600), 'hour');
   }
   const lastSeen = screen.lastHeartbeat ? formatLastSeen(screen.lastHeartbeat) : 'Never';
+  const snapshotV = screen.lastSnapshot?.match(/[?&]v=(\d+)/)?.[1] ?? null;
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden hover:border-gray-600 transition-colors">
@@ -42,7 +43,11 @@ export function ScreenCard({ screen }: Props) {
         <div className="aspect-video bg-gray-800 relative overflow-hidden group">
           {screen.lastSnapshot ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={screen.lastSnapshot} alt="Screen snapshot" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img
+              src={`/api/admin/snapshot?screenId=${screen.id}${snapshotV ? `&v=${snapshotV}` : ''}`}
+              alt="Screen snapshot"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
           ) : (
             <div className="flex items-center justify-center h-full">
               <Monitor className="h-12 w-12 text-gray-600" />

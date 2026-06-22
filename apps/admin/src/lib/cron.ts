@@ -31,10 +31,34 @@ export function startCronJobs() {
               }
             }
 
+            // Notify screens when content items expire mid-play
+            // Window of 2 min covers a missed tick; avoids a persistent "expired" flag
+            const now = new Date();
+            const twoMinAgo = new Date(now.getTime() - 2 * 60 * 1000);
+            const expiredItems = await db.contentItem.findMany({
+              where: { expiresAt: { gte: twoMinAgo, lt: now } },
+              select: { id: true },
+            });
+            if (expiredItems.length > 0) {
+              const expiredIds = expiredItems.map((c) => c.id);
+              const affectedPlaylists = await db.playlistItem.findMany({
+                where: { contentItemId: { in: expiredIds } },
+                select: { playlistId: true },
+                distinct: ['playlistId'],
+              });
+              const playlistIds = affectedPlaylists.map((p) => p.playlistId);
+              if (playlistIds.length > 0) {
+                const affectedScreens = await db.screen.findMany({
+                  where: { currentPlaylistId: { in: playlistIds } },
+                  select: { id: true },
+                });
+                affectedScreens.forEach(({ id }) => emitToScreen(slug, id, 'playlist:update'));
+              }
+            }
+
             // Mark screens offline if heartbeat older than 2 minutes
-            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
             await db.screen.updateMany({
-              where: { isOnline: true, lastHeartbeat: { lt: twoMinutesAgo } },
+              where: { isOnline: true, lastHeartbeat: { lt: twoMinAgo } },
               data: { isOnline: false },
             });
           } catch (err) {

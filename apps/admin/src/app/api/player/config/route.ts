@@ -54,7 +54,9 @@ export async function GET(req: NextRequest) {
       id: p.id,
       name: p.name,
       isDefault: p.isDefault,
-      items: p.items.map((item) => ({
+      items: p.items
+        .filter((item) => !item.contentItem.expiresAt || item.contentItem.expiresAt > new Date())
+        .map((item) => ({
         id: item.id,
         contentItemId: item.contentItemId,
         type: item.contentItem.type as PlayerConfig['playlists'][0]['items'][0]['type'],

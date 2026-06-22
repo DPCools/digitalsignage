@@ -1,5 +1,7 @@
 'use client';
-import { X, ExternalLink, Video, Globe, Camera, FileText, Image as ImageIcon } from 'lucide-react';
+import { useState } from 'react';
+import { X, ExternalLink, Globe, Camera, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { trpc } from '@/lib/trpc-client';
 
 function safeUrl(url: string): string {
   try {
@@ -20,6 +22,7 @@ type ContentItemRow = {
   fileSize: number | null;
   duration: number | null;
   status: string;
+  expiresAt: Date | null;
   createdAt: Date;
 };
 
@@ -156,13 +159,33 @@ function PreviewArea({ item }: { item: ContentItemRow }) {
   );
 }
 
+function toDatetimeLocal(d: Date | null): string {
+  if (!d) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function ContentPreviewModal({
   item,
   onClose,
+  onUpdated,
 }: {
   item: ContentItemRow;
   onClose: () => void;
+  onUpdated?: () => void;
 }) {
+  const [expiresAt, setExpiresAt] = useState(toDatetimeLocal(item.expiresAt ? new Date(item.expiresAt) : null));
+  const setExpiry = trpc.content.setExpiry.useMutation({
+    onSuccess: () => onUpdated?.(),
+  });
+
+  function handleSetExpiry() {
+    setExpiry.mutate({
+      id: item.id,
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    });
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -202,6 +225,36 @@ export function ContentPreviewModal({
           {item.mimeType && (
             <span>Format: <span className="text-gray-300">{item.mimeType}</span></span>
           )}
+        </div>
+
+        {/* Expiry editor */}
+        <div className="flex items-center gap-3 px-5 py-3 border-t border-gray-800 bg-gray-900/60">
+          <label className="text-xs text-gray-400 shrink-0">Expires:</label>
+          <input
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            className="rounded bg-gray-800 border border-gray-700 px-2 py-1 text-xs text-white flex-1 min-w-0"
+          />
+          {expiresAt && (
+            <button
+              onClick={() => setExpiresAt('')}
+              className="text-xs text-gray-500 hover:text-gray-300 shrink-0"
+              title="Clear expiry"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={handleSetExpiry}
+            disabled={setExpiry.isPending}
+            className="flex items-center gap-1 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-3 py-1 text-xs font-medium text-white shrink-0"
+          >
+            {setExpiry.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+            Save
+          </button>
+          {setExpiry.isSuccess && <span className="text-xs text-green-400">Saved</span>}
+          {setExpiry.isError && <span className="text-xs text-red-400">Error</span>}
         </div>
       </div>
     </div>

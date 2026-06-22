@@ -95,14 +95,47 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
       socket.on('alert:emergency', setAlert);
       socket.on('alert:clear', () => setAlert(null));
       socket.on('screen:reload', () => window.location.reload());
-      socket.on('screen:screenshot', async () => {
+      async function takeSnapshot() {
+        console.log('[snapshot] starting capture');
         try {
           const { default: html2canvas } = await import('html2canvas');
-          const canvas = await html2canvas(document.body);
+          const canvas = await html2canvas(document.body, {
+            scale: 0.25,
+            useCORS: true,
+            allowTaint: false,
+            // MJPEG streams cannot be re-fetched as static images — skip them
+            ignoreElements: (el) => {
+              if (el.tagName === 'IMG') {
+                const src = el.getAttribute('src') ?? '';
+                return src.includes('/api/stream/');
+              }
+              return false;
+            },
+          });
+          console.log('[snapshot] canvas rendered', canvas.width, 'x', canvas.height);
+          let dataUrl: string;
+          try {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          } catch (err) {
+            console.warn('[snapshot] toDataURL failed (canvas tainted):', err);
+            return;
+          }
+          const b64 = dataUrl.split(',')[1];
+          console.log('[snapshot] sending', b64.length, 'bytes base64');
           const { sendSnapshot } = await import('@/lib/api');
-          await sendSnapshot(slug, screenId, canvas.toDataURL('image/png').split(',')[1]);
-        } catch { /* non-fatal */ }
-      });
+          const res = await sendSnapshot(slug, screenId, b64);
+          console.log('[snapshot] done, status:', (res as Response | null)?.status);
+        } catch (err) {
+          console.error('[snapshot] failed:', err);
+        }
+      }
+
+      socket.on('screen:screenshot', takeSnapshot);
+
+      // Take an initial snapshot 15 s after startup so the admin view populates
+      // without needing a manual trigger, and then every 5 minutes after that.
+      const snapshotInitTimer = setTimeout(takeSnapshot, 15_000);
+      const snapshotTimer = setInterval(takeSnapshot, 5 * 60 * 1000);
 
       // Keyboard shortcuts
       const keyHandler = (e: KeyboardEvent) => {
@@ -117,6 +150,8 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         engine.destroy();
         clearInterval(configPoll);
         clearInterval(heartbeat);
+        clearTimeout(snapshotInitTimer);
+        clearInterval(snapshotTimer);
         socket.disconnect();
         window.removeEventListener('keydown', keyHandler);
       };

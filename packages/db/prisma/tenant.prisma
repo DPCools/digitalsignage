@@ -61,12 +61,14 @@ model ContentItem {
   status        ContentStatus @default(PENDING)
   approvedBy    String?
   uploadedBy    String
+  expiresAt     DateTime?
   playlistItems PlaylistItem[]
   impressions   Impression[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   @@index([status])
+  @@index([expiresAt])
   @@index([type])
   @@index([createdAt(sort: Desc)])
 }
