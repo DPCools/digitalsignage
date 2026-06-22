@@ -150,6 +150,7 @@ model EmergencyAlert {
   screenIds       String[]
   isActive        Boolean        @default(true)
   severity        AlertSeverity  @default(EMERGENCY)
+  soundUrl        String?
   expiresAt       DateTime?
   createdBy       String
   createdAt       DateTime       @default(now())
@@ -170,6 +171,7 @@ model AlertTemplate {
   targetScreenIds   String[]
   autoExpireMinutes Int?
   severity          AlertSeverity @default(EMERGENCY)
+  soundUrl          String?
   createdBy         String
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt

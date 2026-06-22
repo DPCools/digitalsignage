@@ -1,0 +1,2 @@
+ALTER TABLE "EmergencyAlert" ADD COLUMN IF NOT EXISTS "soundUrl" TEXT;
+ALTER TABLE "AlertTemplate"  ADD COLUMN IF NOT EXISTS "soundUrl" TEXT;

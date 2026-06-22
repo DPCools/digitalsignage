@@ -48,6 +48,7 @@ export interface EmergencyAlertConfig {
   isActive: boolean;
   expiresAt?: string;
   severity?: AlertSeverity;
+  soundUrl?: string;      // optional audio file played on screens when alert fires
 }
 
 export interface PlayerConfig {

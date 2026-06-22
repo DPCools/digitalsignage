@@ -72,6 +72,41 @@ const MIME_TO_EXT: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
+export const AUDIO_MIMES: Record<string, string> = {
+  'audio/mpeg':  'mp3',
+  'audio/ogg':   'ogg',
+  'audio/wav':   'wav',
+  'audio/webm':  'weba',
+  'audio/mp4':   'm4a',
+  'audio/aac':   'aac',
+};
+
+const SOUND_KEY_RE = /^uploads\/[a-z0-9][a-z0-9-]*\/alert-sounds\/\d{13}-[0-9a-f-]{36}\.[a-z0-9]{2,5}$/;
+
+export function isSoundKey(key: string): boolean {
+  return SOUND_KEY_RE.test(key) && !key.includes('..');
+}
+
+export async function getSoundUploadUrl(
+  orgSlug: string,
+  mimeType: string,
+): Promise<{ url: string; key: string }> {
+  const ext = AUDIO_MIMES[mimeType];
+  if (!ext) throw new Error('Unsupported audio MIME type');
+  const key = `uploads/${orgSlug}/alert-sounds/${Date.now()}-${randomUUID()}.${ext}`;
+  const minio = getMinio();
+  const rawUrl = await minio.presignedPutObject(process.env.MINIO_BUCKET!, key, 15 * 60);
+  const internalBase = `http${process.env.MINIO_USE_SSL === 'true' ? 's' : ''}://${process.env.MINIO_ENDPOINT}:${process.env.MINIO_PORT ?? '9000'}`;
+  const url = rawUrl.replace(internalBase, process.env.MINIO_PUBLIC_URL!);
+  return { url, key };
+}
+
+export function getSoundPublicUrl(key: string): string {
+  if (!isSoundKey(key)) throw new Error('Invalid sound key');
+  const segments = key.split('/').map(encodeURIComponent);
+  return `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${segments.join('/')}`;
+}
+
 export const ALLOWED_MIMES = Object.keys(MIME_TO_EXT);
 
 export const MIME_TO_CONTENT_TYPE: Record<string, 'IMAGE' | 'VIDEO' | 'PDF'> = {

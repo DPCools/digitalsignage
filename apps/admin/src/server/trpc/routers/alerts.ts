@@ -21,6 +21,7 @@ export const alertsRouter = router({
       severity: z.enum(['EMERGENCY', 'WARNING', 'INFO']).default('EMERGENCY'),
       screenIds: z.array(z.string()).default([]),
       expiresAt: z.string().datetime().optional(),
+      soundUrl: z.string().url().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Deactivate any existing active alerts before creating a new one
@@ -40,6 +41,7 @@ export const alertsRouter = router({
         screenIds: alert.screenIds, isActive: true,
         severity: alert.severity as EmergencyAlertConfig['severity'],
         expiresAt: alert.expiresAt?.toISOString(),
+        soundUrl: alert.soundUrl ?? undefined,
       };
 
       if (alert.screenIds.length === 0) {

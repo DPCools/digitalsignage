@@ -118,6 +118,7 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
         backgroundColor: template.backgroundColor,
         textColor: template.textColor,
         severity: template.severity,
+        soundUrl: template.soundUrl ?? null,
         templateId: template.id,
         screenIds,
         isActive: true,
@@ -149,6 +150,7 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
     isActive: true,
     severity: alert.severity as EmergencyAlertConfig['severity'],
     expiresAt: alert.expiresAt?.toISOString(),
+    soundUrl: alert.soundUrl ?? undefined,
   };
 
   if (screenIds.length === 0) {

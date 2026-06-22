@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EmergencyAlertConfig } from '@signflow/types';
 
 export function EmergencyOverlay({ alert }: { alert: EmergencyAlertConfig | null }) {
   const [flash, setFlash] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // flashInterval is derived here so it can be used as an effect dependency.
   // undefined severity defaults to EMERGENCY behaviour (600ms) — safe for alerts
@@ -22,6 +23,31 @@ export function EmergencyOverlay({ alert }: { alert: EmergencyAlertConfig | null
     return () => clearInterval(t);
   // Include alert?.id so a replacement alert (same isActive=true) re-triggers.
   }, [alert?.id, alert?.isActive, flashInterval]);
+
+  // Sound playback — loop audio while alert is active, stop when it ends or changes.
+  // Autoplay may be blocked by the browser until the user interacts with the page;
+  // we silently ignore that error — the visual alert still shows.
+  useEffect(() => {
+    if (!alert?.isActive || !alert.soundUrl) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      return;
+    }
+
+    const audio = new Audio(alert.soundUrl);
+    audio.loop = true;
+    audioRef.current = audio;
+    audio.play().catch(() => { /* autoplay blocked — visual alert still shows */ });
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      audioRef.current = null;
+    };
+  }, [alert?.id, alert?.isActive, alert?.soundUrl]);
 
   if (!alert?.isActive) return null;
 

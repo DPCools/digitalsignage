@@ -15,6 +15,7 @@ const templateInput = z.object({
   targetGroupIds: z.array(z.string()).default([]),
   targetScreenIds: z.array(z.string()).default([]),
   autoExpireMinutes: z.number().int().positive().optional(),
+  soundUrl: z.string().url().optional().nullable(),
 });
 
 export const alertTemplatesRouter = router({
@@ -123,6 +124,7 @@ export const alertTemplatesRouter = router({
             backgroundColor: template.backgroundColor,
             textColor: template.textColor,
             severity: template.severity,
+            soundUrl: template.soundUrl ?? null,
             templateId: template.id,
             screenIds,
             isActive: true,
@@ -145,6 +147,7 @@ export const alertTemplatesRouter = router({
         isActive: true,
         severity: alert.severity as EmergencyAlertConfig['severity'],
         expiresAt: alert.expiresAt?.toISOString(),
+        soundUrl: alert.soundUrl ?? undefined,
       };
 
       if (screenIds.length === 0) {

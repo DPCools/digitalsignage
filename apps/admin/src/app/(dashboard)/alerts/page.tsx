@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { trpc } from '@/lib/trpc-client';
 import {
-  AlertTriangle, X, Key, Zap, Trash2, Edit2, Copy, Check, Loader2, Plus,
+  AlertTriangle, X, Key, Zap, Trash2, Edit2, Copy, Check, Loader2, Plus, Music,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,7 @@ type TemplateFormState = {
   targetType: 'ALL' | 'GROUPS' | 'SCREENS';
   targetGroupIds: string[]; targetScreenIds: string[];
   autoExpireMinutes: string;
+  soundUrl: string;
 };
 
 const defaultTemplateForm = (): TemplateFormState => ({
@@ -47,6 +48,7 @@ const defaultTemplateForm = (): TemplateFormState => ({
   severity: 'EMERGENCY',
   targetType: 'ALL', targetGroupIds: [], targetScreenIds: [],
   autoExpireMinutes: '',
+  soundUrl: '',
 });
 
 // ---------------------------------------------------------------------------
@@ -67,6 +69,7 @@ function TemplateModal({
 
   const groups = trpc.screenGroups.list.useQuery();
   const screens = trpc.screens.list.useQuery();
+  const { data: sounds } = trpc.settings.listSounds.useQuery();
   const create = trpc.alertTemplates.create.useMutation({ onSuccess: onSaved });
   const update = trpc.alertTemplates.update.useMutation({ onSuccess: onSaved });
 
@@ -90,6 +93,7 @@ function TemplateModal({
       targetGroupIds: form.targetGroupIds,
       targetScreenIds: form.targetScreenIds,
       autoExpireMinutes: form.autoExpireMinutes ? parseInt(form.autoExpireMinutes, 10) : undefined,
+      soundUrl: form.soundUrl || null,
     };
     if (editId) {
       update.mutate({ id: editId, ...base });
@@ -207,6 +211,29 @@ function TemplateModal({
             className="w-32 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm" />
         </div>
 
+        {/* Sound */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Music className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-400">Alert sound (optional)</span>
+          </div>
+          <select
+            value={form.soundUrl}
+            onChange={(e) => set('soundUrl', e.target.value)}
+            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          >
+            <option value="">No sound</option>
+            {sounds?.map((s) => (
+              <option key={s.id} value={s.url}>{s.name}</option>
+            ))}
+          </select>
+          {!sounds?.length && (
+            <p className="text-xs text-gray-500 mt-1">
+              Upload sounds in <strong className="text-gray-400">Settings → Alert Sounds</strong>.
+            </p>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <div className="flex gap-3 pt-1">
@@ -316,6 +343,7 @@ export default function AlertsPage() {
   const [adHocTitle, setAdHocTitle] = useState('');
   const [adHocMessage, setAdHocMessage] = useState('');
   const [adHocSeverity, setAdHocSeverity] = useState<AlertSeverity>('EMERGENCY');
+  const [adHocSoundUrl, setAdHocSoundUrl] = useState('');
 
   // ---- Tab 2 state
   const [templateModal, setTemplateModal] = useState<{ open: boolean; editId?: string; initial: TemplateFormState }>({
@@ -329,10 +357,14 @@ export default function AlertsPage() {
   const [urlCopied, setUrlCopied] = useState(false);
 
   // ---- Queries / mutations
+  const { data: sounds } = trpc.settings.listSounds.useQuery();
   const { data: alerts, refetch: refetchAlerts } = trpc.alerts.list.useQuery();
   const active = trpc.alerts.getActive.useQuery();
   const createAlert = trpc.alerts.create.useMutation({
-    onSuccess: () => { refetchAlerts(); active.refetch(); setAdHocTitle(''); setAdHocMessage(''); setAdHocSeverity('EMERGENCY'); },
+    onSuccess: () => {
+      refetchAlerts(); active.refetch();
+      setAdHocTitle(''); setAdHocMessage(''); setAdHocSeverity('EMERGENCY'); setAdHocSoundUrl('');
+    },
   });
   const deactivate = trpc.alerts.deactivate.useMutation({
     onSuccess: () => { refetchAlerts(); active.refetch(); },
@@ -445,8 +477,24 @@ export default function AlertsPage() {
                 </label>
               ))}
             </div>
+            {/* Sound selector */}
+            {sounds && sounds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Music className="h-4 w-4 text-gray-400 shrink-0" />
+                <select
+                  value={adHocSoundUrl}
+                  onChange={(e) => setAdHocSoundUrl(e.target.value)}
+                  className="flex-1 rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+                >
+                  <option value="">No sound</option>
+                  {sounds.map((s) => (
+                    <option key={s.id} value={s.url}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {createAlert.error && <p className="text-sm text-red-400">{createAlert.error.message}</p>}
-            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage, severity: adHocSeverity })}
+            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage, severity: adHocSeverity, soundUrl: adHocSoundUrl || undefined })}
               disabled={!adHocTitle || !adHocMessage || createAlert.isPending}
               className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50">
               {createAlert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
@@ -530,6 +578,7 @@ export default function AlertsPage() {
                       targetType: t.targetType as 'ALL' | 'GROUPS' | 'SCREENS',
                       targetGroupIds: t.targetGroupIds, targetScreenIds: t.targetScreenIds,
                       autoExpireMinutes: t.autoExpireMinutes?.toString() ?? '',
+                      soundUrl: t.soundUrl ?? '',
                     },
                   })}
                   className="rounded-lg p-1.5 text-gray-400 hover:text-white hover:bg-gray-800">

@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
           isActive: activeAlert.isActive,
           severity: activeAlert.severity as 'EMERGENCY' | 'WARNING' | 'INFO',
           expiresAt: activeAlert.expiresAt?.toISOString(),
+          soundUrl: activeAlert.soundUrl ?? undefined,
         }
       : null,
     timezone: 'UTC',
