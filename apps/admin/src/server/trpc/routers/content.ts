@@ -122,7 +122,10 @@ export const contentRouter = router({
   createWebPage: adminProcedure
     .input(z.object({
       name: z.string().min(1),
-      url: z.string().url(),
+      url: z.string().url().refine(
+        (u) => { try { const { protocol } = new URL(u); return protocol === 'http:' || protocol === 'https:'; } catch { return false; } },
+        { message: 'URL must use http or https' }
+      ),
       refreshInterval: z.number().int().min(1).nullable(),
       duration: z.number().int().min(1).default(30),
     }))

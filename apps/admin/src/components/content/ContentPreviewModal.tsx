@@ -1,6 +1,15 @@
 'use client';
 import { X, ExternalLink, Video, Globe, Camera, FileText, Image as ImageIcon } from 'lucide-react';
 
+function safeUrl(url: string): string {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:' ? url : '#';
+  } catch {
+    return '#';
+  }
+}
+
 type ContentItemRow = {
   id: string;
   name: string;
@@ -50,7 +59,7 @@ function PreviewArea({ item }: { item: ContentItemRow }) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={item.url}
+        src={safeUrl(item.url)}
         alt={item.name}
         className="max-h-[60vh] max-w-full mx-auto object-contain rounded-lg"
       />
@@ -60,7 +69,7 @@ function PreviewArea({ item }: { item: ContentItemRow }) {
   if (item.type === 'VIDEO') {
     return (
       <video
-        src={item.url}
+        src={safeUrl(item.url)}
         controls
         className="max-h-[60vh] max-w-full mx-auto rounded-lg"
         style={{ aspectRatio: '16/9' }}
@@ -71,24 +80,27 @@ function PreviewArea({ item }: { item: ContentItemRow }) {
   if (item.type === 'PDF') {
     return (
       <div className="w-full h-[60vh] rounded-lg overflow-hidden border border-gray-700">
-        <embed src={item.url} type="application/pdf" width="100%" height="100%" />
+        <embed src={safeUrl(item.url)} type="application/pdf" width="100%" height="100%" />
       </div>
     );
   }
 
   if (item.type === 'WEB_PAGE') {
+    const href = safeUrl(item.url);
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-10">
         <Globe className="w-14 h-14 text-gray-600" />
         <p className="text-sm text-gray-400 break-all max-w-sm text-center">{item.url}</p>
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          Open in new tab <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        {href !== '#' && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Open in new tab <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
     );
   }
@@ -124,10 +136,10 @@ function PreviewArea({ item }: { item: ContentItemRow }) {
       <div className="flex flex-col items-center justify-center gap-3 py-10">
         <FileText className="w-14 h-14 text-gray-600" />
         <p className="text-sm text-gray-400">HTML Template</p>
-        {item.thumbnailUrl && (
+        {item.thumbnailUrl && safeUrl(item.thumbnailUrl) !== '#' && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.thumbnailUrl}
+            src={safeUrl(item.thumbnailUrl)}
             alt={item.name}
             className="max-h-48 rounded-lg border border-gray-700"
           />
