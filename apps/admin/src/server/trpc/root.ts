@@ -13,6 +13,7 @@ import { apiKeysRouter } from './routers/apiKeys';
 import { settingsRouter } from './routers/settings';
 import { usersRouter } from './routers/users';
 import { auditRouter } from './routers/audit';
+import { pushRouter } from './routers/push';
 
 export const appRouter = router({
   orgs: orgsRouter,
@@ -29,6 +30,7 @@ export const appRouter = router({
   settings: settingsRouter,
   users: usersRouter,
   audit: auditRouter,
+  push: pushRouter,
 });
 
 export type AppRouter = typeof appRouter;
