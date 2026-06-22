@@ -1,7 +1,8 @@
 'use client';
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { trpc } from '@/lib/trpc-client';
-import { Upload, Loader2, Trash2, Globe, Camera, X, Plus, Eye } from 'lucide-react';
+import { Upload, Loader2, Trash2, Globe, Camera, X, Plus, Eye, FileCode } from 'lucide-react';
 import { ContentPreviewModal } from '@/components/content/ContentPreviewModal';
 
 type DeleteTarget = { ids: string[]; label: string };
@@ -350,6 +351,13 @@ export default function ContentPage() {
               Delete {selected.size} selected
             </button>
           )}
+          <Link
+            href="/content/templates"
+            className="flex items-center gap-2 rounded-lg bg-gray-700 hover:bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors"
+          >
+            <FileCode className="h-4 w-4" />
+            Templates
+          </Link>
           <button
             onClick={() => setShowWebPageModal(true)}
             className="flex items-center gap-2 rounded-lg bg-gray-700 hover:bg-gray-600 px-4 py-2 text-sm font-medium text-white transition-colors"
