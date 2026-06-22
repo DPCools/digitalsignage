@@ -1,7 +1,8 @@
 'use client';
 import { useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { Upload, Loader2, Trash2, Globe, Camera, X, Plus } from 'lucide-react';
+import { Upload, Loader2, Trash2, Globe, Camera, X, Plus, Eye } from 'lucide-react';
+import { ContentPreviewModal } from '@/components/content/ContentPreviewModal';
 
 type DeleteTarget = { ids: string[]; label: string };
 
@@ -185,7 +186,7 @@ function CctvGridModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             <div key={index} className="flex items-center gap-2">
               <div className="flex-1 space-y-1.5">
                 <input
-                  placeholder="Stream URL (e.g. http://user:pass@192.168.1.10/...)"
+                  placeholder="Stream URL (http:// or rtsp://user:pass@IP:554/...)"
                   value={stream.url}
                   onChange={(e) => updateStream(index, 'url', e.target.value)}
                   className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
@@ -220,9 +221,9 @@ function CctvGridModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         {/* Brand URL hints */}
         <div className="rounded-lg bg-gray-800 border border-gray-700 px-4 py-3 space-y-1.5">
           <p className="text-xs font-medium text-gray-300">Common stream URL formats</p>
-          <p className="text-xs text-gray-500"><span className="text-gray-400">Axis:</span> http://user:pass@IP/axis-cgi/mjpg/video.cgi</p>
-          <p className="text-xs text-gray-500"><span className="text-gray-400">Hikvision:</span> http://user:pass@IP/Streaming/channels/1/picture (or /ISAPI/...)</p>
-          <p className="text-xs text-gray-500"><span className="text-gray-400">Dahua:</span> http://user:pass@IP/cgi-bin/mjpg/video.cgi</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Axis (MJPEG):</span> http://user:pass@IP/axis-cgi/mjpg/video.cgi</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Hikvision (RTSP):</span> rtsp://user:pass@IP:554/ISAPI/Streaming/channels/101</p>
+          <p className="text-xs text-gray-500"><span className="text-gray-400">Dahua (MJPEG):</span> http://user:pass@IP/cgi-bin/mjpg/video.cgi</p>
         </div>
 
         {create.error && <p className="text-sm text-red-400">{create.error.message}</p>}
@@ -260,6 +261,7 @@ export default function ContentPage() {
   const [deleting, setDeleting] = useState(false);
   const [showWebPageModal, setShowWebPageModal] = useState(false);
   const [showCctvModal, setShowCctvModal] = useState(false);
+  const [previewItem, setPreviewItem] = useState<ContentItemRow | null>(null);
 
   const { data, refetch } = trpc.content.list.useQuery({}, {
     refetchInterval: (query: { state: { data?: { items: Array<{ type: string; url: string }> } } }) =>
@@ -445,16 +447,25 @@ export default function ContentPage() {
                     {item.type.toLowerCase().replace('_', ' ')}
                   </p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteTarget({ ids: [item.id], label: `"${item.name}"` });
-                  }}
-                  title="Delete"
-                  className="shrink-0 rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPreviewItem(item); }}
+                    title="Preview"
+                    className="rounded p-1 text-gray-600 hover:text-blue-400 hover:bg-gray-800 transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ ids: [item.id], label: `"${item.name}"` });
+                    }}
+                    title="Delete"
+                    className="rounded p-1 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -515,6 +526,14 @@ export default function ContentPage() {
         <CctvGridModal
           onClose={() => setShowCctvModal(false)}
           onSaved={() => { refetch(); setShowCctvModal(false); }}
+        />
+      )}
+
+      {/* Content preview modal */}
+      {previewItem && (
+        <ContentPreviewModal
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
         />
       )}
     </div>

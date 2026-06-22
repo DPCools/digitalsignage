@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/tenant"
+  provider      = "prisma-client-js"
+  output        = "../src/generated/tenant"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -26,6 +27,10 @@ model Screen {
   impressions       Impression[]
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+
+  @@index([lastHeartbeat(sort: Desc)])
+  @@index([currentPlaylistId])
+  @@index([groupId])
 }
 
 model ScreenGroup {
@@ -60,6 +65,10 @@ model ContentItem {
   impressions   Impression[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt(sort: Desc)])
 }
 
 model Template {
@@ -121,6 +130,9 @@ model Schedule {
   isActive    Boolean        @default(true)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@index([playlistId])
+  @@index([isActive])
 }
 
 model EmergencyAlert {
@@ -140,6 +152,8 @@ model EmergencyAlert {
   createdBy       String
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@index([isActive])
 }
 
 model AlertTemplate {
@@ -179,6 +193,8 @@ model ScreenHeartbeat {
   timestamp  DateTime @default(now())
   playlistId String?
   contentId  String?
+
+  @@index([screenId, timestamp(sort: Desc)])
 }
 
 model Impression {
@@ -189,6 +205,29 @@ model Impression {
   screen        Screen      @relation(fields: [screenId], references: [id])
   playedAt      DateTime    @default(now())
   durationMs    Int
+
+  @@index([playedAt(sort: Desc)])
+  @@index([contentItemId])
+  @@index([screenId])
+}
+
+model OrgSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  actorId    String
+  actorName  String
+  targetId   String?
+  targetName String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
 }
 
 enum GroupType {

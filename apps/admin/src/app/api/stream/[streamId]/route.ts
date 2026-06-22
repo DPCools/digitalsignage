@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
+import { spawn, type ChildProcess } from 'child_process';
 import { getTenantClient } from '@signflow/db';
 import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { tryAcquireTranscode, releaseTranscode, RTSP_HARD_CAP } from '@/lib/rtsp-semaphore';
+import { SETTING_DEFAULTS } from '@/server/trpc/routers/settings';
 
 // Upstream content-types accepted from cameras. Anything outside this list is rejected
 // to prevent XSS via Content-Type passthrough.
@@ -71,6 +74,65 @@ async function fetchCamera(
   }
 }
 
+// Transcode an RTSP stream to MJPEG using FFmpeg.
+// FFmpeg's mpjpeg muxer outputs multipart/x-mixed-replace with boundary "ffmpeg".
+//
+// Security note — credentials in argv:
+// FFmpeg's RTSP handler reads auth exclusively from the URL; there is no
+// separate credential flag (e.g. -rtsp_user / -rtsp_pass) that keeps the
+// secret out of the process argv. To avoid embedding the raw URL in this
+// process's spawn() args array (which appears in code audit and error logs),
+// we pass the full URL via an environment variable (SF_RTSP_URL) and let
+// the shell expand it. This means the /bin/sh process argv contains only a
+// template string — no credentials. After `exec`, the shell is replaced by
+// ffmpeg whose argv will contain the expanded URL (unavoidable with FFmpeg
+// RTSP auth). The ffmpeg process is short-lived: it dies the moment the
+// client disconnects. Credentials in ffmpeg's argv are readable only by
+// processes with the same OS user or root.
+function streamRtsp(rtspUrl: string, fps: number): NextResponse {
+  const ffmpeg = spawn('/bin/sh', [
+    '-c',
+    `exec /usr/bin/ffmpeg -loglevel quiet -rtsp_transport tcp -i "$SF_RTSP_URL" -f mpjpeg -q:v 5 -r ${fps} pipe:1`,
+  ], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: {
+      ...process.env,
+      SF_RTSP_URL: rtspUrl,
+    },
+  }) as unknown as ChildProcess;
+
+  const release = () => releaseTranscode();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      ffmpeg.stdout!.on('data', (chunk: Buffer) => {
+        try { controller.enqueue(new Uint8Array(chunk)); } catch { /* stream closed */ }
+      });
+      ffmpeg.stdout!.on('end', () => {
+        release();
+        try { controller.close(); } catch { /* already closed */ }
+      });
+      ffmpeg.on('error', () => {
+        release();
+        try { controller.close(); } catch { /* already closed */ }
+      });
+    },
+    cancel() {
+      release();
+      try { ffmpeg.kill('SIGKILL'); } catch { /* already dead */ }
+    },
+  });
+
+  return new NextResponse(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'multipart/x-mixed-replace;boundary=ffmpeg',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ streamId: string }> }
@@ -126,33 +188,55 @@ export async function GET(
     return NextResponse.json({ error: 'Stream index out of range' }, { status: 404 });
   }
 
-  const rawUrl = streams[streamIndex].url;
+  const rawUrl = streams[streamIndex].url?.trim();
   if (!rawUrl) {
     return NextResponse.json({ error: 'Stream URL not configured' }, { status: 404 });
   }
 
-  // Parse and validate the camera URL, stripping inline credentials
-  let cleanUrl: string;
-  let username: string | null = null;
-  let password: string | null = null;
-
+  // Parse the URL to extract credentials, then dispatch to the right handler.
+  let parsedUrl: URL;
   try {
-    const u = new URL(rawUrl);
-
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      return NextResponse.json({ error: 'Unsupported camera protocol' }, { status: 400 });
-    }
-
-    if (u.username) {
-      username = decodeURIComponent(u.username);
-      password = decodeURIComponent(u.password);
-    }
-    u.username = '';
-    u.password = '';
-    cleanUrl = u.toString();
+    parsedUrl = new URL(rawUrl);
   } catch {
     return NextResponse.json({ error: 'Invalid stream URL' }, { status: 400 });
   }
+
+  const username = parsedUrl.username ? decodeURIComponent(parsedUrl.username) : null;
+  const password = parsedUrl.username ? decodeURIComponent(parsedUrl.password) : null;
+
+  // ── RTSP path ──────────────────────────────────────────────────────────────
+  // Transcode RTSP streams to MJPEG via FFmpeg; the proxy serves the output as
+  // multipart/x-mixed-replace so the player's <img> tag can display live video.
+  if (parsedUrl.protocol === 'rtsp:' || parsedUrl.protocol === 'rtsps:') {
+    // Read org settings for FPS cap and concurrency limit
+    const settingRows = await db.orgSetting.findMany({
+      where: { key: { in: ['rtsp_fps', 'rtsp_max_transcodes'] } },
+    });
+    const settingMap: Record<string, string> = { ...SETTING_DEFAULTS };
+    for (const row of settingRows) settingMap[row.key] = row.value;
+
+    const fps    = Math.min(30, Math.max(1, parseInt(settingMap.rtsp_fps, 10) || 8));
+    const maxTx  = Math.min(RTSP_HARD_CAP, Math.max(1, parseInt(settingMap.rtsp_max_transcodes, 10) || 4));
+
+    if (!tryAcquireTranscode(maxTx)) {
+      return NextResponse.json(
+        { error: `Transcode limit reached (${maxTx} active). Try again shortly.` },
+        { status: 503 }
+      );
+    }
+
+    return streamRtsp(rawUrl, fps);
+  }
+
+  // ── HTTP/HTTPS path ─────────────────────────────────────────────────────────
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return NextResponse.json({ error: 'Unsupported camera protocol' }, { status: 400 });
+  }
+
+  // Strip credentials from URL before fetching (sent via Authorization header instead)
+  parsedUrl.username = '';
+  parsedUrl.password = '';
+  const cleanUrl = parsedUrl.toString();
 
   // Build the initial auth header (Basic if credentials provided)
   const basicAuth = username

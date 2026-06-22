@@ -23,7 +23,7 @@ export default function LoginPage() {
       setError('Invalid email or password');
     } else {
       // Use window.location to avoid next/navigation typedRoutes inference issues
-      window.location.href = '/dashboard';
+      window.location.href = '/';
     }
   }
 

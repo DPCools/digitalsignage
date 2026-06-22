@@ -9,7 +9,9 @@
     "db:migrate:tenant": "tsx ./src/apply-tenant-migrations.ts",
     "db:seed": "tsx ./prisma/seed.ts"
   },
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "main": "./src/index.ts",
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -21,6 +23,6 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
-    "pg": "^8.13.0"
+    "pg": "^8.21.0"
   }
 }
