@@ -9,10 +9,13 @@ import { publicClient } from '@signflow/db';
 let configured = false;
 function getWebPush() {
   if (!configured) {
+    if (!process.env.VAPID_SUBJECT || !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+      throw new Error('VAPID_SUBJECT, VAPID_PUBLIC_KEY, and VAPID_PRIVATE_KEY must all be set');
+    }
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT!,
-      process.env.VAPID_PUBLIC_KEY!,
-      process.env.VAPID_PRIVATE_KEY!,
+      process.env.VAPID_SUBJECT,
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY,
     );
     configured = true;
   }
@@ -50,14 +53,18 @@ export async function sendPushToOrg(
           message,
         );
       } catch (err: unknown) {
-        // 410 Gone = subscription expired; remove it
+        // 404/410 = subscription expired or deleted; remove it
         if (
           typeof err === 'object' &&
           err !== null &&
           'statusCode' in err &&
-          (err as { statusCode: number }).statusCode === 410
+          [404, 410].includes((err as { statusCode: number }).statusCode)
         ) {
-          await publicClient.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } });
+          try {
+            await publicClient.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } });
+          } catch (cleanupErr) {
+            console.error('[push] failed to delete stale subscription:', cleanupErr);
+          }
         }
       }
     }),
