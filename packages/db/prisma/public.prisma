@@ -21,17 +21,18 @@ model Organization {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  email         String       @unique
-  name          String?
-  passwordHash  String?
-  role          Role         @default(VIEWER)
-  orgId         String
-  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  emailVerified DateTime?
-  preferences   Json?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String?
+  passwordHash      String?
+  role              Role               @default(VIEWER)
+  orgId             String
+  org               Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  emailVerified     DateTime?
+  preferences       Json?
+  pushSubscriptions PushSubscription[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model PairingCode {
@@ -55,6 +56,19 @@ model Invite {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime     @default(now())
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 enum Role {
