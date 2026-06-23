@@ -15,14 +15,14 @@ export const pushRouter = router({
         where: { endpoint: input.endpoint },
         select: { userId: true },
       });
-      if (existing && existing.userId !== ctx.session!.user.id) {
+      if (existing && existing.userId !== ctx.session.user.id) {
         throw new TRPCError({ code: 'FORBIDDEN' });
       }
       await publicClient.pushSubscription.upsert({
         where: { endpoint: input.endpoint },
         update: { p256dh: input.p256dh, auth: input.auth },
         create: {
-          userId: ctx.session!.user.id,
+          userId: ctx.session.user.id,
           endpoint: input.endpoint,
           p256dh: input.p256dh,
           auth: input.auth,
@@ -34,7 +34,7 @@ export const pushRouter = router({
     .input(z.object({ endpoint: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       await publicClient.pushSubscription.deleteMany({
-        where: { endpoint: input.endpoint, userId: ctx.session!.user.id },
+        where: { endpoint: input.endpoint, userId: ctx.session.user.id },
       });
     }),
 });

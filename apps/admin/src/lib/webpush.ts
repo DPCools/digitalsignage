@@ -1,4 +1,4 @@
-// Required environment variables (add to your deployment secrets — do NOT put in .env):
+// Required environment variables (add to .env.local for development, deployment secrets for production):
 //   VAPID_SUBJECT    — e.g. "mailto:admin@example.com"
 //   VAPID_PUBLIC_KEY — VAPID public key (base64url)
 //   VAPID_PRIVATE_KEY — VAPID private key (base64url)
