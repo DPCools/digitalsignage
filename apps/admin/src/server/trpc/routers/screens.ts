@@ -113,9 +113,10 @@ export const screensRouter = router({
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ ctx, input }) =>
-      ctx.db.screen.delete({ where: { id: input.id } })
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.impression.deleteMany({ where: { screenId: input.id } });
+      return ctx.db.screen.delete({ where: { id: input.id } });
+    }),
 
   sendCommand: adminProcedure
     .input(z.object({
@@ -124,10 +125,19 @@ export const screensRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { emitToScreen } = await import('@/server/socket');
-      const event = input.command === 'reload' ? 'screen:reload'
-        : input.command === 'screenshot' ? 'screen:screenshot'
-        : 'playlist:update';
-      await emitToScreen(ctx.orgSlug, input.screenId, event);
+
+      if (input.command === 'screenshot') {
+        // Write a Redis flag (60 s TTL).  The player polls /api/player/snapshot-trigger
+        // every 5 s and atomically consumes this flag — no socket timing dependency.
+        const { getRedis } = await import('@/lib/redis');
+        await getRedis().set(`snap:${ctx.orgSlug}:${input.screenId}`, '1', 'EX', 60);
+        // Best-effort immediate delivery via socket in case the player is already connected.
+        await emitToScreen(ctx.orgSlug, input.screenId, 'screen:screenshot');
+      } else {
+        const event = input.command === 'reload' ? 'screen:reload' : 'playlist:update';
+        await emitToScreen(ctx.orgSlug, input.screenId, event);
+      }
+
       return { ok: true };
     }),
 });

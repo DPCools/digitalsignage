@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import { getMinio, ensureBucketPolicy } from '@/lib/minio';
 import type { SnapshotRequest } from '@signflow/types';
-import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyAndSyncPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -19,11 +19,12 @@ export async function POST(req: NextRequest) {
   if (!body.screenId || !body.orgSlug || !body.imageBase64) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
-  if (!verifyPlayerToken(body.screenId, body.orgSlug, req.headers.get('authorization'))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
   if (!isSafeOrgSlug(body.orgSlug) || !isSafeId(body.screenId)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
+  }
+  const db = getTenantClient(body.orgSlug);
+  if (!(await verifyAndSyncPlayerToken(db, body.screenId, body.orgSlug, req.headers.get('authorization')))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   // ~2 MB base64 ≈ 1.5 MB decoded image
   if (body.imageBase64.length > 2 * 1024 * 1024) {
@@ -44,7 +45,6 @@ export async function POST(req: NextRequest) {
   // ?v= version stamp ensures lastSnapshot changes on every upload so the admin
   // UI's proxy URL cache-key changes and the browser re-fetches the new image.
   const url = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${key}?v=${Date.now()}`;
-  const db = getTenantClient(body.orgSlug);
   await db.screen.update({ where: { id: body.screenId }, data: { lastSnapshot: url } });
 
   return NextResponse.json({ ok: true, url });

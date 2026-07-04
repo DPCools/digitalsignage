@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isIP } from 'net';
 import { promises as dns } from 'dns';
-import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { getTenantClient } from '@signflow/db';
+import { verifyAndSyncPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 // ---------------------------------------------------------------------------
 // Security notes
@@ -201,7 +202,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
-  const bearerOk = verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'));
+  const db = getTenantClient(orgSlug);
+  const bearerOk = await verifyAndSyncPlayerToken(db, screenId, orgSlug, req.headers.get('authorization'));
   const streamOk = verifyStreamToken(screenId, orgSlug, token);
   if (!bearerOk && !streamOk) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

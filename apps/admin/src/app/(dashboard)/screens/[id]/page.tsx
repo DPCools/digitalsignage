@@ -5,6 +5,7 @@ import { auth } from '@/server/auth';
 import { getTenantClient } from '@signflow/db';
 import { SnapshotViewer } from '@/components/screens/SnapshotViewer';
 import { PushUpdateButton } from '@/components/screens/PushUpdateButton';
+import { DeleteScreenButton } from '@/components/screens/DeleteScreenButton';
 
 const ONLINE_MS = 90_000;
 
@@ -95,7 +96,10 @@ export default async function ScreenDetailPage({
               {online ? 'Online' : 'Offline'}
             </span>
           </div>
-          <PushUpdateButton screenId={screen.id} />
+          <div className="flex items-center gap-2">
+            <PushUpdateButton screenId={screen.id} />
+            <DeleteScreenButton screenId={screen.id} screenName={screen.name} />
+          </div>
         </div>
       </div>
 

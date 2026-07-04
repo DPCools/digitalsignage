@@ -14,18 +14,19 @@ export default auth((req) => {
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/invite/') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname === '/login' ||
+    pathname === '/register'
   ) {
+    // Redirect authenticated users away from auth pages
+    if (req.auth && (pathname === '/login' || pathname === '/register')) {
+      return NextResponse.redirect(new URL('/', req.url));
+    }
     return NextResponse.next();
   }
 
   if (!req.auth) {
     return NextResponse.redirect(new URL('/login', req.url));
-  }
-
-  // Redirect authenticated users away from login/register
-  if (pathname === '/login' || pathname === '/register') {
-    return NextResponse.redirect(new URL('/', req.url));
   }
 
   return NextResponse.next();
