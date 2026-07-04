@@ -13,6 +13,10 @@ model Screen {
   id                String           @id @default(cuid())
   name              String
   uniqueCode        String           @unique
+  // Opaque bearer token issued at pairing time, verified by DB lookup rather
+  // than recomputed HMAC — so rotating/losing PLAYER_TOKEN_SECRET never
+  // invalidates devices that have already paired.
+  authToken         String?          @unique
   groupId           String?
   group             ScreenGroup?     @relation(fields: [groupId], references: [id])
   orientation       Orientation      @default(LANDSCAPE)
@@ -42,8 +46,24 @@ model ScreenGroup {
   defaultPlaylistId String?
   defaultPlaylist   Playlist? @relation("GroupDefaultPlaylist", fields: [defaultPlaylistId], references: [id])
   screens           Screen[]
+  audioBridges      AudioBridge[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model AudioBridge {
+  id        String      @id @default(cuid())
+  name      String
+  groupId   String
+  group     ScreenGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  host      String
+  port      Int         @default(80)
+  username  String
+  password  String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([groupId])
 }
 
 model ContentItem {
@@ -91,6 +111,10 @@ model Playlist {
   name           String
   description    String?
   isDefault      Boolean        @default(false)
+  // Grid layout: preset id (e.g. "2x2"); NULL = legacy 4-zone layout (main/ticker/clock/weather)
+  layoutPreset   String?
+  // Per-cell mode overrides: [{ "cellId": "a", "mode": "FIXED" }, ...]
+  cellConfig     Json?
   items          PlaylistItem[]
   schedules      Schedule[]
   currentScreens  Screen[]       @relation("CurrentScreenPlaylist")
@@ -148,14 +172,43 @@ model EmergencyAlert {
   /// Service layer must handle the case where the referenced template no longer exists.
   templateId      String?
   screenIds       String[]
+  /// RecipientList ids emailed when this alert is triggered. No FK — deleting a
+  /// list must not cascade-delete historical alerts; stale ids are skipped at send.
+  recipientListIds String[]
   isActive        Boolean        @default(true)
   severity        AlertSeverity  @default(EMERGENCY)
+  soundUrl        String?
+  soundRepeat     Int            @default(30)
   expiresAt       DateTime?
   createdBy       String
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([isActive])
+}
+
+/// A named, reusable set of email addresses that can be assigned to alerts and to
+/// the screen-offline email template.
+model RecipientList {
+  id        String   @id @default(cuid())
+  name      String
+  emails    String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// One editable email template per notification event. Seeded on first read.
+/// `recipientListIds` is only meaningful for the SCREEN_OFFLINE event (its global
+/// recipients); ALERT_TRIGGERED picks lists per-alert and USER_INVITED emails the
+/// invitee directly.
+model EmailTemplate {
+  id               String   @id @default(cuid())
+  event            String   @unique
+  enabled          Boolean  @default(true)
+  subject          String
+  bodyHtml         String
+  recipientListIds String[]
+  updatedAt        DateTime @updatedAt
 }
 
 model AlertTemplate {
@@ -168,11 +221,24 @@ model AlertTemplate {
   targetType        TargetType    @default(ALL)
   targetGroupIds    String[]
   targetScreenIds   String[]
+  /// RecipientList ids emailed when an alert created from this template triggers.
+  recipientListIds  String[]
   autoExpireMinutes Int?
   severity          AlertSeverity @default(EMERGENCY)
+  soundUrl          String?
+  soundRepeat       Int           @default(30)
   createdBy         String
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+}
+
+model AlertSound {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique
+  url       String
+  createdBy String
+  createdAt DateTime @default(now())
 }
 
 model ApiKey {

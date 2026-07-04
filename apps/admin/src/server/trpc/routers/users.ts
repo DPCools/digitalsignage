@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { randomBytes } from 'crypto';
 import { router, adminProcedure } from '../init';
 import { writeAuditLog } from '@/lib/audit';
+import { sendEventEmail } from '@/lib/email-templates';
 
 const ROLE_OPTIONS = ['ADMIN', 'CONTENT_MANAGER', 'VIEWER'] as const;
 
@@ -10,7 +11,7 @@ export const usersRouter = router({
   list: adminProcedure.query(async ({ ctx }) => {
     const [users, invites] = await Promise.all([
       ctx.publicDb.user.findMany({
-        where: { orgId: ctx.session.user.orgId, role: { not: 'SUPER_ADMIN' } },
+        where: { orgId: ctx.session.user.orgId },
         select: { id: true, email: true, name: true, role: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
@@ -76,6 +77,22 @@ export const usersRouter = router({
         targetName: input.email,
         metadata: { role: input.role },
       });
+
+      // Email the invitee their join link (best-effort — the invite stands
+      // whether or not the email goes out).
+      const org = await ctx.publicDb.organization.findUnique({
+        where: { id: ctx.session.user.orgId },
+        select: { name: true },
+      });
+      const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? '';
+      await sendEventEmail(ctx.db, 'USER_INVITED', {
+        inviteLink: `${baseUrl}/invite/${token}`,
+        orgName: org?.name ?? ctx.session.user.orgSlug,
+        inviterName: ctx.session.user.email,
+        email: input.email,
+        role: input.role,
+        expiresAt: expiresAt.toLocaleString('en-GB'),
+      }, [input.email]);
 
       return { token };
     }),

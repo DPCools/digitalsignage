@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { router, tenantProcedure, adminProcedure } from '../init';
 import { emitToOrg, emitToScreen } from '@/server/socket';
+import { pushAlertAudio, stopAlertAudio } from '@/lib/audio-bridge';
+import { resolveListEmails, sendEventEmail } from '@/lib/email-templates';
 import type { EmergencyAlertConfig } from '@signflow/types';
 import { TRPCError } from '@trpc/server';
 
@@ -14,7 +16,10 @@ const templateInput = z.object({
   targetType: z.enum(['ALL', 'GROUPS', 'SCREENS']).default('ALL'),
   targetGroupIds: z.array(z.string()).default([]),
   targetScreenIds: z.array(z.string()).default([]),
+  recipientListIds: z.array(z.string()).default([]),
   autoExpireMinutes: z.number().int().positive().optional(),
+  soundUrl: z.string().url().optional().nullable(),
+  soundRepeat: z.number().int().min(1).max(999).default(30).optional(),
 });
 
 export const alertTemplatesRouter = router({
@@ -111,6 +116,7 @@ export const alertTemplatesRouter = router({
         } else {
           existing.screenIds.forEach((id) => emitToScreen(ctx.orgSlug, id, 'alert:clear'));
         }
+        stopAlertAudio(existing.id);
       }
 
       // Deactivate existing alerts and create the new one atomically
@@ -123,8 +129,11 @@ export const alertTemplatesRouter = router({
             backgroundColor: template.backgroundColor,
             textColor: template.textColor,
             severity: template.severity,
+            soundUrl: template.soundUrl ?? undefined,
+            soundRepeat: template.soundRepeat,
             templateId: template.id,
             screenIds,
+            recipientListIds: template.recipientListIds,
             isActive: true,
             expiresAt: template.autoExpireMinutes
               ? new Date(Date.now() + template.autoExpireMinutes * 60_000)
@@ -145,6 +154,8 @@ export const alertTemplatesRouter = router({
         isActive: true,
         severity: alert.severity as EmergencyAlertConfig['severity'],
         expiresAt: alert.expiresAt?.toISOString(),
+        soundUrl: alert.soundUrl ?? undefined,
+        soundRepeat: alert.soundRepeat,
       };
 
       if (screenIds.length === 0) {
@@ -152,6 +163,20 @@ export const alertTemplatesRouter = router({
       } else {
         alert.screenIds.forEach((id) => emitToScreen(ctx.orgSlug, id, 'alert:emergency', payload));
       }
+      void pushAlertAudio(ctx.db, alert.id, alert.screenIds, alert.soundUrl, alert.soundRepeat);
+
+      // Email the alert to the template's recipient lists (fire-and-forget).
+      const db = ctx.db;
+      void (async () => {
+        const recipients = await resolveListEmails(db, alert.recipientListIds);
+        await sendEventEmail(db, 'ALERT_TRIGGERED', {
+          alertTitle: alert.title,
+          alertMessage: alert.message,
+          severity: alert.severity,
+          triggeredAt: alert.createdAt.toLocaleString('en-GB'),
+          screens: alert.screenIds.length === 0 ? 'All screens' : `${alert.screenIds.length} screen(s)`,
+        }, recipients);
+      })().catch((err) => console.error('[email] ALERT_TRIGGERED dispatch failed:', err));
 
       return alert;
     }),

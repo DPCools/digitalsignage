@@ -8,7 +8,7 @@ export const screenGroupsRouter = router({
   list: tenantProcedure.query(({ ctx }) =>
     ctx.db.screenGroup.findMany({
       include: {
-        _count: { select: { screens: true } },
+        _count: { select: { screens: true, audioBridges: true } },
         defaultPlaylist: { select: { id: true, name: true } },
       },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
