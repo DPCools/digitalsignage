@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { trpc } from '@/lib/trpc-client';
 import {
-  AlertTriangle, X, Key, Zap, Trash2, Edit2, Copy, Check, Loader2, Plus,
+  AlertTriangle, X, Key, Zap, Trash2, Edit2, Copy, Check, Loader2, Plus, Volume2, VolumeX, Mail,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,10 @@ type TemplateFormState = {
   severity: AlertSeverity;
   targetType: 'ALL' | 'GROUPS' | 'SCREENS';
   targetGroupIds: string[]; targetScreenIds: string[];
+  recipientListIds: string[];
   autoExpireMinutes: string;
+  soundUrl: string;
+  soundRepeat: string;
 };
 
 const defaultTemplateForm = (): TemplateFormState => ({
@@ -46,7 +49,10 @@ const defaultTemplateForm = (): TemplateFormState => ({
   backgroundColor: '#FF0000', textColor: '#FFFFFF',
   severity: 'EMERGENCY',
   targetType: 'ALL', targetGroupIds: [], targetScreenIds: [],
+  recipientListIds: [],
   autoExpireMinutes: '',
+  soundUrl: '',
+  soundRepeat: '30',
 });
 
 // ---------------------------------------------------------------------------
@@ -67,6 +73,8 @@ function TemplateModal({
 
   const groups = trpc.screenGroups.list.useQuery();
   const screens = trpc.screens.list.useQuery();
+  const sounds = trpc.alertSounds.list.useQuery();
+  const recipientLists = trpc.recipientLists.list.useQuery();
   const create = trpc.alertTemplates.create.useMutation({ onSuccess: onSaved });
   const update = trpc.alertTemplates.update.useMutation({ onSuccess: onSaved });
 
@@ -89,7 +97,10 @@ function TemplateModal({
       targetType: form.targetType,
       targetGroupIds: form.targetGroupIds,
       targetScreenIds: form.targetScreenIds,
+      recipientListIds: form.recipientListIds,
       autoExpireMinutes: form.autoExpireMinutes ? parseInt(form.autoExpireMinutes, 10) : undefined,
+      soundUrl: form.soundUrl || null,
+      soundRepeat: form.soundRepeat ? parseInt(form.soundRepeat, 10) : 30,
     };
     if (editId) {
       update.mutate({ id: editId, ...base });
@@ -198,6 +209,61 @@ function TemplateModal({
             {screens.data?.length === 0 && <p className="text-xs text-gray-500">No screens available.</p>}
           </div>
         )}
+
+        {/* Alert sound */}
+        <div>
+          <span className="text-xs text-gray-400 block mb-2">Alert sound (played on screens when triggered)</span>
+          <select
+            value={form.soundUrl}
+            onChange={(e) => set('soundUrl', e.target.value)}
+            className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+          >
+            <option value="">— No sound —</option>
+            {sounds.data?.map((s) => (
+              <option key={s.id} value={s.url}>{s.name}</option>
+            ))}
+          </select>
+          {sounds.data?.length === 0 && (
+            <p className="text-xs text-gray-600 mt-1">Upload sounds in Settings → Alert Sounds.</p>
+          )}
+          {form.soundUrl && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-gray-400 shrink-0">Repeat</span>
+              <input
+                type="number" min={1} max={999} value={form.soundRepeat}
+                onChange={(e) => set('soundRepeat', e.target.value)}
+                className="w-20 rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-white text-sm"
+              />
+              <span className="text-xs text-gray-400">times (default 30)</span>
+            </div>
+          )}
+        </div>
+
+        {/* Email recipient lists */}
+        <div>
+          <span className="text-xs text-gray-400 block mb-2">Email recipient lists (notified when this template is triggered)</span>
+          {(recipientLists.data ?? []).length === 0 ? (
+            <p className="text-xs text-gray-600">No recipient lists — create them in Settings → Recipient Lists.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {(recipientLists.data ?? []).map((l) => {
+                const on = form.recipientListIds.includes(l.id);
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => set('recipientListIds', toggleArr(form.recipientListIds, l.id))}
+                    className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                      on ? 'border-red-500 bg-red-950/30 text-red-200' : 'border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {l.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Auto-expire */}
         <div>
@@ -316,6 +382,9 @@ export default function AlertsPage() {
   const [adHocTitle, setAdHocTitle] = useState('');
   const [adHocMessage, setAdHocMessage] = useState('');
   const [adHocSeverity, setAdHocSeverity] = useState<AlertSeverity>('EMERGENCY');
+  const [adHocSoundUrl, setAdHocSoundUrl] = useState('');
+  const [adHocSoundRepeat, setAdHocSoundRepeat] = useState('30');
+  const [adHocListIds, setAdHocListIds] = useState<string[]>([]);
 
   // ---- Tab 2 state
   const [templateModal, setTemplateModal] = useState<{ open: boolean; editId?: string; initial: TemplateFormState }>({
@@ -329,10 +398,12 @@ export default function AlertsPage() {
   const [urlCopied, setUrlCopied] = useState(false);
 
   // ---- Queries / mutations
+  const { data: sounds } = trpc.alertSounds.list.useQuery();
+  const { data: recipientLists } = trpc.recipientLists.list.useQuery();
   const { data: alerts, refetch: refetchAlerts } = trpc.alerts.list.useQuery();
   const active = trpc.alerts.getActive.useQuery();
   const createAlert = trpc.alerts.create.useMutation({
-    onSuccess: () => { refetchAlerts(); active.refetch(); setAdHocTitle(''); setAdHocMessage(''); setAdHocSeverity('EMERGENCY'); },
+    onSuccess: () => { refetchAlerts(); active.refetch(); setAdHocTitle(''); setAdHocMessage(''); setAdHocSeverity('EMERGENCY'); setAdHocSoundUrl(''); setAdHocSoundRepeat('30'); setAdHocListIds([]); },
   });
   const deactivate = trpc.alerts.deactivate.useMutation({
     onSuccess: () => { refetchAlerts(); active.refetch(); },
@@ -445,8 +516,65 @@ export default function AlertsPage() {
                 </label>
               ))}
             </div>
+            {/* Sound picker */}
+            <div>
+              <span className="text-xs text-gray-400 block mb-1.5 flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5" /> Alert sound
+              </span>
+              <select
+                value={adHocSoundUrl}
+                onChange={(e) => setAdHocSoundUrl(e.target.value)}
+                className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-white text-sm"
+              >
+                <option value="">— No sound —</option>
+                {sounds?.map((s) => (
+                  <option key={s.id} value={s.url}>{s.name}</option>
+                ))}
+              </select>
+              {sounds?.length === 0 && (
+                <p className="text-xs text-gray-600 mt-1">Upload sounds in Settings → Alert Sounds.</p>
+              )}
+              {adHocSoundUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-gray-400 shrink-0">Repeat</span>
+                  <input
+                    type="number" min={1} max={999} value={adHocSoundRepeat}
+                    onChange={(e) => setAdHocSoundRepeat(e.target.value)}
+                    className="w-20 rounded-lg bg-gray-800 border border-gray-700 px-3 py-1.5 text-white text-sm"
+                  />
+                  <span className="text-xs text-gray-400">times (default 30)</span>
+                </div>
+              )}
+            </div>
+            {/* Email recipient lists */}
+            <div>
+              <span className="text-xs text-gray-400 block mb-1.5 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" /> Email recipient lists
+              </span>
+              {(recipientLists ?? []).length === 0 ? (
+                <p className="text-xs text-gray-600">No recipient lists — create them in Settings → Recipient Lists.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {(recipientLists ?? []).map((l) => {
+                    const on = adHocListIds.includes(l.id);
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => setAdHocListIds((prev) => on ? prev.filter((x) => x !== l.id) : [...prev, l.id])}
+                        className={`rounded-full px-2.5 py-0.5 text-xs border transition-colors ${
+                          on ? 'border-red-500 bg-red-950/30 text-red-200' : 'border-gray-700 bg-gray-800 text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        {l.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {createAlert.error && <p className="text-sm text-red-400">{createAlert.error.message}</p>}
-            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage, severity: adHocSeverity })}
+            <button suppressHydrationWarning onClick={() => createAlert.mutate({ title: adHocTitle, message: adHocMessage, severity: adHocSeverity, soundUrl: adHocSoundUrl || undefined, soundRepeat: adHocSoundUrl ? parseInt(adHocSoundRepeat, 10) : undefined, recipientListIds: adHocListIds })}
               disabled={!adHocTitle || !adHocMessage || createAlert.isPending}
               className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50">
               {createAlert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
@@ -529,7 +657,10 @@ export default function AlertsPage() {
                       severity: (t.severity as AlertSeverity | undefined) ?? 'EMERGENCY',
                       targetType: t.targetType as 'ALL' | 'GROUPS' | 'SCREENS',
                       targetGroupIds: t.targetGroupIds, targetScreenIds: t.targetScreenIds,
+                      recipientListIds: (t as { recipientListIds?: string[] }).recipientListIds ?? [],
                       autoExpireMinutes: t.autoExpireMinutes?.toString() ?? '',
+                      soundUrl: (t as { soundUrl?: string | null }).soundUrl ?? '',
+                      soundRepeat: String((t as { soundRepeat?: number }).soundRepeat ?? 30),
                     },
                   })}
                   className="rounded-lg p-1.5 text-gray-400 hover:text-white hover:bg-gray-800">
