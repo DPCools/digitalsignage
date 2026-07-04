@@ -85,13 +85,16 @@ importers:
         version: 15.5.19(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       next-auth:
         specifier: 5.0.0-beta.31
-        version: 5.0.0-beta.31(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 5.0.0-beta.31(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(nodemailer@7.0.13)(react@19.2.7)
       next-intl:
         specifier: ^3.26.0
         version: 3.26.5(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       node-cron:
         specifier: ^3.0.0
         version: 3.0.3
+      nodemailer:
+        specifier: ^7.0.13
+        version: 7.0.13
       pino:
         specifier: ^9.5.0
         version: 9.14.0
@@ -123,6 +126,9 @@ importers:
       '@types/node-cron':
         specifier: ^3.0.0
         version: 3.0.11
+      '@types/nodemailer':
+        specifier: ^8.0.1
+        version: 8.0.1
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -150,9 +156,9 @@ importers:
       '@signflow/types':
         specifier: workspace:*
         version: link:../../packages/types
-      html2canvas:
-        specifier: ^1.4.1
-        version: 1.4.1
+      html2canvas-pro:
+        specifier: ^2.2.1
+        version: 2.2.1
       idb:
         specifier: ^8.0.0
         version: 8.0.3
@@ -2202,6 +2208,9 @@ packages:
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
 
+  '@types/nodemailer@8.0.1':
+    resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
+
   '@types/pg@8.20.0':
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
@@ -2896,9 +2905,9 @@ packages:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
 
-  html2canvas@1.4.1:
-    resolution: {integrity: sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA==}
-    engines: {node: '>=8.0.0'}
+  html2canvas-pro@2.2.1:
+    resolution: {integrity: sha512-AoSeM/GpU5eKZ3rPNHJbMDgxMS0MJgvA9tQAcceHSzdS33ULqv889oiRSyxxz6PvVL/dbnYOrGKnqmNSpIaX1g==}
+    engines: {node: '>=16.0.0'}
 
   http-proxy-agent@7.0.2:
     resolution: {integrity: sha512-T1gkAiYYDWYx3V5Bmyu7HcfcvL7mUrTWiM6yOfa3PIphViJ/gFPbvidQ+veqSOHci/PxBcDabeUNCzpOODJZig==}
@@ -3362,6 +3371,10 @@ packages:
   node-releases@2.0.48:
     resolution: {integrity: sha512-1uz8041X6LoI6ZSdZacM9lVY28vuzDlSKitnpbSNK0RfKoIJkX29NBPVEFXhnuSuEOA9Ww0xnPJ+ILWbGAv8DA==}
     engines: {node: '>=18'}
+
+  nodemailer@7.0.13:
+    resolution: {integrity: sha512-PNDFSJdP+KFgdsG3ZzMXCgquO7I6McjY2vlqILjtJd0hy8wEvtugS9xKRF2NWlPNGxvLCXlTNIae4serI7dinw==}
+    engines: {node: '>=6.0.0'}
 
   notepack.io@3.0.1:
     resolution: {integrity: sha512-TKC/8zH5pXIAMVQio2TvVDTtPRX+DJPHDqjRbxogtFiByHyzKmy96RA0JtCQJ+WouyyL4A10xomQzgbUT+1jCg==}
@@ -4397,13 +4410,15 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@auth/core@0.41.2':
+  '@auth/core@0.41.2(nodemailer@7.0.13)':
     dependencies:
       '@panva/hkdf': 1.2.1
       jose: 6.2.3
       oauth4webapi: 3.8.6
       preact: 10.24.3
       preact-render-to-string: 6.5.11(preact@10.24.3)
+    optionalDependencies:
+      nodemailer: 7.0.13
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -6181,6 +6196,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@8.0.1':
+    dependencies:
+      '@types/node': 22.19.21
+
   '@types/pg@8.20.0':
     dependencies:
       '@types/node': 22.19.21
@@ -7035,7 +7054,7 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/hashes'
 
-  html2canvas@1.4.1:
+  html2canvas-pro@2.2.1:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
@@ -7443,11 +7462,13 @@ snapshots:
 
   neo-async@2.6.2: {}
 
-  next-auth@5.0.0-beta.31(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7):
+  next-auth@5.0.0-beta.31(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(nodemailer@7.0.13)(react@19.2.7):
     dependencies:
-      '@auth/core': 0.41.2
+      '@auth/core': 0.41.2(nodemailer@7.0.13)
       next: 15.5.19(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7
+    optionalDependencies:
+      nodemailer: 7.0.13
 
   next-intl@3.26.5(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7):
     dependencies:
@@ -7485,6 +7506,8 @@ snapshots:
       uuid: 8.3.2
 
   node-releases@2.0.48: {}
+
+  nodemailer@7.0.13: {}
 
   notepack.io@3.0.1: {}
 
