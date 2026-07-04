@@ -1,4 +1,5 @@
 import type { PlayerConfig, PlaylistConfig, PlaylistItemConfig, Zone } from '@signflow/types';
+import { getGridPreset, LEGACY_ZONE_IDS } from '@signflow/types';
 import { resolveActivePlaylist } from './scheduler';
 import { queueImpression, getCachedAsset, cacheAsset } from '@/lib/db';
 import { sendImpressions } from '@/lib/api';
@@ -8,6 +9,7 @@ export type ZoneState = {
   items: PlaylistItemConfig[];
   currentIndex: number;
   currentItem: PlaylistItemConfig | null;
+  isFixed: boolean;
 };
 
 export type EngineState = {
@@ -17,22 +19,38 @@ export type EngineState = {
 
 export type EngineListener = (state: EngineState) => void;
 
-const ZONES: Zone[] = ['main', 'ticker', 'clock', 'weather'];
 const IMPRESSION_FLUSH_MS = 30_000;
 
 export class PlaylistEngine {
   private config: PlayerConfig | null = null;
-  private state: EngineState = this.emptyState();
+  private state: EngineState = this.emptyState(LEGACY_ZONE_IDS);
   private listeners: Set<EngineListener> = new Set();
   private timers: Map<Zone, ReturnType<typeof setTimeout>> = new Map();
   private watchdogTimers: Map<Zone, ReturnType<typeof setTimeout>> = new Map();
   private impressionTimer: ReturnType<typeof setInterval> | null = null;
   private itemStartTimes: Map<Zone, number> = new Map();
 
-  private emptyState(): EngineState {
+  // Resolves which zone/cell ids are active for a playlist: its grid preset's
+  // cells if it has one, otherwise the legacy main/ticker/clock/weather set.
+  private resolveZoneIds(playlist: PlaylistConfig | null): readonly string[] {
+    const preset = getGridPreset(playlist?.layoutPreset);
+    return preset ? preset.cells.map((c) => c.id) : LEGACY_ZONE_IDS;
+  }
+
+  // A cell is FIXED if the playlist's cellModes says so, else the preset's
+  // own default for that cell, else DYNAMIC. Legacy (no preset) zones are
+  // always DYNAMIC — unchanged from today's behavior.
+  private resolveIsFixed(playlist: PlaylistConfig | null, zone: string): boolean {
+    if (!playlist?.layoutPreset) return false;
+    const preset = getGridPreset(playlist.layoutPreset);
+    const mode = playlist.cellModes?.[zone] ?? preset?.cells.find((c) => c.id === zone)?.defaultMode ?? 'DYNAMIC';
+    return mode === 'FIXED';
+  }
+
+  private emptyState(zoneIds: readonly string[]): EngineState {
     const zones = {} as Record<Zone, ZoneState>;
-    for (const z of ZONES) {
-      zones[z] = { zone: z, items: [], currentIndex: 0, currentItem: null };
+    for (const z of zoneIds) {
+      zones[z] = { zone: z, items: [], currentIndex: 0, currentItem: null, isFixed: false };
     }
     return { zones, activePlaylist: null };
   }
@@ -80,35 +98,45 @@ export class PlaylistEngine {
 
   private playlistFingerprint(playlist: PlaylistConfig | null): string {
     if (!playlist) return '';
-    return playlist.items.map(i => `${i.id}:${i.url}`).join('|');
+    // Must cover every field that changes how/where content renders — not just
+    // id+url — or a push update that only reassigns zones or switches the grid
+    // preset (same items, same urls) gets silently skipped below.
+    const items = playlist.items.map(i => `${i.id}:${i.url}:${i.zone}:${i.duration}:${i.transition}`).join('|');
+    const cellModes = JSON.stringify(playlist.cellModes ?? {});
+    return `${playlist.layoutPreset ?? ''}::${cellModes}::${items}`;
   }
 
   private buildZoneQueues(playlist: PlaylistConfig | null): Record<Zone, ZoneState> {
-    const queues = this.emptyState().zones;
+    const zoneIds = this.resolveZoneIds(playlist);
+    const queues = this.emptyState(zoneIds).zones;
     if (!playlist) return queues;
 
     for (const item of playlist.items) {
-      const zone = (item.zone as Zone) ?? 'main';
+      const zone = item.zone ?? 'main';
       if (queues[zone]) {
         queues[zone].items.push(item);
       }
     }
 
-    for (const zone of ZONES) {
+    for (const zone of zoneIds) {
       queues[zone].currentItem = queues[zone].items[0] ?? null;
+      queues[zone].isFixed = this.resolveIsFixed(playlist, zone);
     }
 
     return queues;
   }
 
   private startAllZones() {
-    for (const zone of ZONES) {
+    for (const zone of Object.keys(this.state.zones)) {
       this.scheduleNextTick(zone);
     }
   }
 
   private scheduleNextTick(zone: Zone) {
     const zoneState = this.state.zones[zone];
+    // Fixed cells hold exactly one item and never rotate — no timer at all.
+    if (zoneState.isFixed) return;
+
     const item = zoneState.currentItem;
     if (!item) return;
 
@@ -134,6 +162,10 @@ export class PlaylistEngine {
 
   tick(zone: Zone) {
     const zoneState = this.state.zones[zone];
+    // Defensive guard: a fixed cell holding a looping VIDEO could still have
+    // onVideoEnd invoke tick() directly — never advance a fixed cell's index.
+    if (!zoneState || zoneState.isFixed) return;
+
     const completedItem = zoneState.currentItem;
     const startTime = this.itemStartTimes.get(zone);
 
@@ -171,7 +203,7 @@ export class PlaylistEngine {
   }
 
   private async preloadForAllZones() {
-    for (const zone of ZONES) {
+    for (const zone of Object.keys(this.state.zones)) {
       await this.preloadNext(zone);
     }
   }

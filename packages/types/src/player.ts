@@ -1,4 +1,7 @@
-export type Zone = 'main' | 'ticker' | 'clock' | 'weather';
+import type { CellMode } from './layout-presets';
+
+// Was a hardcoded 4-value union; now any cell id from a GridPreset, or a legacy zone id.
+export type Zone = string;
 
 export type ContentType = 'IMAGE' | 'VIDEO' | 'HTML_TEMPLATE' | 'RSS_FEED' | 'PDF' | 'WEB_PAGE' | 'CCTV_GRID';
 export type TransitionType = 'FADE' | 'SLIDE_LEFT' | 'SLIDE_RIGHT' | 'ZOOM' | 'NONE';
@@ -20,6 +23,8 @@ export interface PlaylistConfig {
   id: string;
   name: string;
   isDefault: boolean;
+  layoutPreset?: string | null;            // preset id, e.g. "2x2"; null/undefined = legacy 4-zone layout
+  cellModes?: Record<string, CellMode>;    // cellId -> FIXED/DYNAMIC, meaningful only when layoutPreset is set
   items: PlaylistItemConfig[];
 }
 
@@ -48,6 +53,8 @@ export interface EmergencyAlertConfig {
   isActive: boolean;
   expiresAt?: string;
   severity?: AlertSeverity;
+  soundUrl?: string;
+  soundRepeat?: number;
 }
 
 export interface PlayerConfig {
@@ -69,4 +76,5 @@ export interface ResolvedZoneQueue {
   zone: Zone;
   items: PlaylistItemConfig[];
   currentIndex: number;
+  isFixed?: boolean;
 }

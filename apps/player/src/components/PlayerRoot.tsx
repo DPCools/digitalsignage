@@ -1,19 +1,19 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PlayerConfig, EmergencyAlertConfig } from '@signflow/types';
-import { PlaylistEngine, type EngineState, type ZoneState } from '@/engine/PlaylistEngine';
+import { PlaylistEngine, type EngineState } from '@/engine/PlaylistEngine';
 import { ScreenLayout } from './ScreenLayout';
 import { EmergencyOverlay } from './EmergencyOverlay';
 import { DebugOverlay } from './DebugOverlay';
-import { fetchPlayerConfig, sendHeartbeat } from '@/lib/api';
+import { fetchPlayerConfig, sendHeartbeat, checkSnapshotTrigger } from '@/lib/api';
 import { getConfig, getPlayerConfig, setPlayerConfig } from '@/lib/db';
 import { connectSocket } from '@/lib/socket';
 
 const ZONES_INIT: EngineState['zones'] = {
-  main:    { zone: 'main',    items: [], currentIndex: 0, currentItem: null },
-  ticker:  { zone: 'ticker',  items: [], currentIndex: 0, currentItem: null },
-  clock:   { zone: 'clock',   items: [], currentIndex: 0, currentItem: null },
-  weather: { zone: 'weather', items: [], currentIndex: 0, currentItem: null },
+  main:    { zone: 'main',    items: [], currentIndex: 0, currentItem: null, isFixed: false },
+  ticker:  { zone: 'ticker',  items: [], currentIndex: 0, currentItem: null, isFixed: false },
+  clock:   { zone: 'clock',   items: [], currentIndex: 0, currentItem: null, isFixed: false },
+  weather: { zone: 'weather', items: [], currentIndex: 0, currentItem: null, isFixed: false },
 };
 
 export function PlayerRoot({ screenId }: { screenId: string }) {
@@ -38,19 +38,19 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
   }, []);
 
   useEffect(() => {
-    let configPoll: ReturnType<typeof setInterval>;
-    let heartbeat: ReturnType<typeof setInterval>;
-    // Track current state for the heartbeat closure without needing to access private fields
+    let configPoll:      ReturnType<typeof setInterval>;
+    let heartbeat:       ReturnType<typeof setInterval>;
+    let snapshotInitTimer: ReturnType<typeof setTimeout>;
+    let snapshotTimer:   ReturnType<typeof setInterval>;
+    let triggerPoll:     ReturnType<typeof setInterval>;
     let currentState: EngineState = { activePlaylist: null, zones: ZONES_INIT };
 
     async function init() {
-      // Read orgSlug from IndexedDB
       const cfg = await getConfig();
       if (!cfg) return;
       const { orgSlug: slug } = cfg;
       setOrgSlug(slug);
 
-      // Init engine
       const engine = new PlaylistEngine();
       engineRef.current = engine;
       const unsub = engine.subscribe((state) => {
@@ -58,7 +58,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         setEngineState(state);
       });
 
-      // Load cached config immediately
+      // Load cached config immediately so content shows without waiting for network
       const cached = await getPlayerConfig();
       if (cached) {
         engine.load(cached);
@@ -67,16 +67,13 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         if (cached.playerStreamToken) setStreamToken(cached.playerStreamToken);
       }
 
-      // Fetch fresh config
       fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null);
 
-      // Poll every 5 minutes
       configPoll = setInterval(
         () => fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null),
         5 * 60 * 1000
       );
 
-      // Heartbeat every 30 seconds
       heartbeat = setInterval(() => {
         sendHeartbeat(
           screenId,
@@ -86,25 +83,26 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         );
       }, 30_000);
 
-      // Connect Socket.io
-      const socket = connectSocket(screenId, slug);
-      // playlist:update carries no payload — it's a signal to re-fetch from the server
-      socket.on('playlist:update', () =>
-        fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null)
-      );
-      socket.on('alert:emergency', setAlert);
-      socket.on('alert:clear', () => setAlert(null));
-      socket.on('screen:reload', () => window.location.reload());
+      // ----------------------------------------------------------------
+      // Snapshot capture
+      // ----------------------------------------------------------------
+      let isCapturing = false;
+
       async function takeSnapshot() {
+        if (isCapturing) return;
+        isCapturing = true;
         console.log('[snapshot] starting capture');
         try {
-          const { default: html2canvas } = await import('html2canvas');
+          const { default: html2canvas } = await import('html2canvas-pro');
           const canvas = await html2canvas(document.body, {
             scale: 0.25,
             useCORS: true,
             allowTaint: false,
-            // MJPEG streams cannot be re-fetched as static images — skip them
             ignoreElements: (el) => {
+              if ((el as HTMLElement).dataset?.snapshotIgnore === 'true') return true;
+              // Iframes and canvases are skipped; videos are overlaid manually below
+              if (el.tagName === 'CANVAS' || el.tagName === 'IFRAME') return true;
+              if (el.tagName === 'VIDEO') return true;
               if (el.tagName === 'IMG') {
                 const src = el.getAttribute('src') ?? '';
                 return src.includes('/api/stream/');
@@ -112,7 +110,21 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
               return false;
             },
           });
-          console.log('[snapshot] canvas rendered', canvas.width, 'x', canvas.height);
+
+          // Overlay the current video frame — but ONLY for videos that have the
+          // crossOrigin attribute set.  Drawing a non-CORS video taints the canvas
+          // and causes toDataURL to throw, silently killing the snapshot upload.
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            document.querySelectorAll('video').forEach((video) => {
+              if (video.readyState < 2 || !video.crossOrigin) return;
+              try {
+                const r = video.getBoundingClientRect();
+                ctx.drawImage(video, r.left * 0.25, r.top * 0.25, r.width * 0.25, r.height * 0.25);
+              } catch { /* ignore */ }
+            });
+          }
+
           let dataUrl: string;
           try {
             dataUrl = canvas.toDataURL('image/jpeg', 0.85);
@@ -120,24 +132,47 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
             console.warn('[snapshot] toDataURL failed (canvas tainted):', err);
             return;
           }
+
           const b64 = dataUrl.split(',')[1];
-          console.log('[snapshot] sending', b64.length, 'bytes base64');
+          console.log('[snapshot] uploading', b64.length, 'B');
           const { sendSnapshot } = await import('@/lib/api');
-          const res = await sendSnapshot(slug, screenId, b64);
-          console.log('[snapshot] done, status:', (res as Response | null)?.status);
+          await sendSnapshot(slug, screenId, b64);
+          console.log('[snapshot] done');
         } catch (err) {
           console.error('[snapshot] failed:', err);
+        } finally {
+          isCapturing = false;
         }
       }
 
+      // Poll every 5 s for a pending screenshot trigger set by the admin.
+      // This is the primary reliable mechanism — no socket timing dependency.
+      triggerPoll = setInterval(async () => {
+        try {
+          const pending = await checkSnapshotTrigger(screenId, slug);
+          if (pending) takeSnapshot();
+        } catch { /* ignore network errors */ }
+      }, 5_000);
+
+      // Auto-capture 15 s after startup and every 5 min so the admin view
+      // always has a recent snapshot without a manual trigger.
+      snapshotInitTimer = setTimeout(takeSnapshot, 15_000);
+      snapshotTimer     = setInterval(takeSnapshot, 5 * 60 * 1000);
+
+      // Socket — fast-path: immediate capture when admin is watching and
+      // the player is already connected. Reliable path is the triggerPoll above.
+      const socket = connectSocket(screenId, slug);
+      const handlePlaylistUpdate = () =>
+        fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null);
+      const handleAlertClear = () => setAlert(null);
+      const handleReload     = () => window.location.reload();
+
+      socket.on('playlist:update',  handlePlaylistUpdate);
+      socket.on('alert:emergency',  setAlert);
+      socket.on('alert:clear',      handleAlertClear);
+      socket.on('screen:reload',    handleReload);
       socket.on('screen:screenshot', takeSnapshot);
 
-      // Take an initial snapshot 15 s after startup so the admin view populates
-      // without needing a manual trigger, and then every 5 minutes after that.
-      const snapshotInitTimer = setTimeout(takeSnapshot, 15_000);
-      const snapshotTimer = setInterval(takeSnapshot, 5 * 60 * 1000);
-
-      // Keyboard shortcuts
       const keyHandler = (e: KeyboardEvent) => {
         if (e.key === 'F11') { e.preventDefault(); document.documentElement.requestFullscreen?.(); }
         if (e.key === 'r') window.location.reload();
@@ -150,8 +185,14 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         engine.destroy();
         clearInterval(configPoll);
         clearInterval(heartbeat);
+        clearInterval(triggerPoll);
         clearTimeout(snapshotInitTimer);
         clearInterval(snapshotTimer);
+        socket.off('playlist:update',  handlePlaylistUpdate);
+        socket.off('alert:emergency',  setAlert);
+        socket.off('alert:clear',      handleAlertClear);
+        socket.off('screen:reload',    handleReload);
+        socket.off('screen:screenshot', takeSnapshot);
         socket.disconnect();
         window.removeEventListener('keydown', keyHandler);
       };
@@ -166,6 +207,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
       <EmergencyOverlay alert={alert} />
       <ScreenLayout
         zones={engineState.zones}
+        layoutPreset={engineState.activePlaylist?.layoutPreset}
         screenId={screenId}
         orgSlug={orgSlug}
         weatherApiKey={weatherApiKey}
