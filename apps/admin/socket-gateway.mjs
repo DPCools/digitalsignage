@@ -50,4 +50,11 @@ io.on('connection', (socket) => {
   });
 });
 
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`[gateway] port ${PORT} already in use — another instance is running, exiting cleanly`);
+    process.exit(0);
+  }
+  throw err;
+});
 httpServer.listen(PORT, () => console.log(`[gateway] listening on :${PORT}`));

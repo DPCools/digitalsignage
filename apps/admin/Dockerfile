@@ -27,7 +27,8 @@ RUN apk add --no-cache ffmpeg curl openssl
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/public ./apps/admin/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/socket-gateway.mjs ./apps/admin/socket-gateway.mjs
 USER nextjs
-EXPOSE 3000
+EXPOSE 3000 3002
 ENV PORT=3000 HOSTNAME="0.0.0.0"
-CMD ["node", "apps/admin/server.js"]
+CMD ["sh", "-c", "node apps/admin/socket-gateway.mjs & node apps/admin/server.js"]

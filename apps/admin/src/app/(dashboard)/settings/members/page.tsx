@@ -15,6 +15,7 @@ interface AuditLogEntry {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Owner',
   ADMIN: 'Admin',
   CONTENT_MANAGER: 'Content Manager',
   VIEWER: 'Viewer',
@@ -25,6 +26,7 @@ type OrgRole = typeof ROLE_OPTIONS[number];
 
 function RoleBadge({ role }: { role: string }) {
   const colours: Record<string, string> = {
+    SUPER_ADMIN: 'bg-amber-900 text-amber-300',
     ADMIN: 'bg-purple-900 text-purple-300',
     CONTENT_MANAGER: 'bg-blue-900 text-blue-300',
     VIEWER: 'bg-gray-800 text-gray-400',
@@ -206,28 +208,34 @@ export default function MembersPage() {
                     <div className="text-xs text-gray-500">{user.email}</div>
                   </td>
                   <td className="px-6 py-3">
-                    <div className="flex flex-col">
-                      <select
-                        value={user.role}
-                        onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value as OrgRole })}
-                        className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
-                      >
-                        {ROLE_OPTIONS.map((r) => (
-                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">Role changes take effect on next login</p>
-                    </div>
+                    {user.role === 'SUPER_ADMIN' ? (
+                      <RoleBadge role={user.role} />
+                    ) : (
+                      <div className="flex flex-col">
+                        <select
+                          value={user.role}
+                          onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value as OrgRole })}
+                          className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
+                        >
+                          {ROLE_OPTIONS.map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">Role changes take effect on next login</p>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-xs text-gray-500">{formatDate(user.createdAt)}</td>
                   <td className="px-6 py-3 text-right">
-                    <button
-                      onClick={() => { if (confirm(`Remove ${user.email}?`)) remove.mutate({ userId: user.id }); }}
-                      className="rounded p-1.5 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
-                      title="Remove member"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {user.role !== 'SUPER_ADMIN' && (
+                      <button
+                        onClick={() => { if (confirm(`Remove ${user.email}?`)) remove.mutate({ userId: user.id }); }}
+                        className="rounded p-1.5 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
+                        title="Remove member"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

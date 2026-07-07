@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { setConfig } from '@/lib/db';
+import { setConfig, getConfig } from '@/lib/db';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -9,6 +9,10 @@ export default function PairPage() {
   const router = useRouter();
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Only true once we've confirmed there's no usable existing pairing —
+  // prevents flashing a fresh pairing code (and burning a code) for a
+  // device that's already validly registered.
+  const [checkedExisting, setCheckedExisting] = useState(false);
 
   const createCode = useCallback(async () => {
     try {
@@ -21,6 +25,39 @@ export default function PairPage() {
       setTimeout(createCode, 5000);
     }
   }, []);
+
+  // On load, check for an existing pairing in IndexedDB. If it's still
+  // valid on the server, skip re-pairing entirely and go straight to /play.
+  // Only fall through to generating a new code if there's no stored config
+  // or the server rejects the stored token (device was actually removed).
+  useEffect(() => {
+    (async () => {
+      const cfg = await getConfig();
+      if (!cfg?.token) {
+        setCheckedExisting(true);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${BASE}/api/player/config?screenId=${encodeURIComponent(cfg.screenId)}&orgSlug=${encodeURIComponent(cfg.orgSlug)}`,
+          { headers: { Authorization: `Bearer ${cfg.token}` } }
+        );
+        if (res.ok) {
+          router.replace(`/play/${cfg.screenId}`);
+          return;
+        }
+      } catch {
+        // Network error — treat as unverifiable, not invalid. Don't burn a
+        // pairing code just because the device briefly lost connectivity.
+        setError('Cannot verify existing pairing. Retrying…');
+        setTimeout(() => setCheckedExisting(false), 5000);
+        return;
+      }
+      // Server explicitly rejected the token (e.g. screen was deleted) —
+      // this device genuinely needs to re-pair.
+      setCheckedExisting(true);
+    })();
+  }, [router]);
 
   // Poll for registration
   useEffect(() => {
@@ -46,7 +83,9 @@ export default function PairPage() {
     return () => clearInterval(interval);
   }, [code, router]);
 
-  useEffect(() => { createCode(); }, [createCode]);
+  useEffect(() => {
+    if (checkedExisting) createCode();
+  }, [checkedExisting, createCode]);
 
   // Keyboard shortcut: F11 fullscreen
   useEffect(() => {
@@ -74,7 +113,9 @@ export default function PairPage() {
           <p className="text-gray-500 text-sm animate-pulse">Waiting for registration…</p>
         </div>
       ) : (
-        <div className="text-gray-500 text-sm animate-pulse">Generating pairing code…</div>
+        <div className="text-gray-500 text-sm animate-pulse">
+          {checkedExisting ? 'Generating pairing code…' : 'Checking for existing pairing…'}
+        </div>
       )}
     </div>
   );

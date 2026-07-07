@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { Calendar, Plus, Trash2 } from 'lucide-react';
+import { ConfirmButton } from '@/components/ui/ConfirmButton';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -63,9 +64,17 @@ export default function SchedulesPage() {
               <span className={`text-xs rounded-full px-2 py-0.5 ${s.isActive ? 'bg-green-900 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
                 {s.isActive ? 'Active' : 'Inactive'}
               </span>
-              <button onClick={() => remove.mutate({ id: s.id })} className="text-gray-600 hover:text-red-400 transition-colors">
+              <ConfirmButton
+                onConfirm={() => remove.mutate({ id: s.id })}
+                pending={remove.isPending}
+                error={remove.error?.message}
+                title="Delete schedule?"
+                message={<>Permanently delete <span className="font-medium text-white">{s.name || s.playlist.name}</span>? This can&rsquo;t be undone.</>}
+                triggerAriaLabel="Delete schedule"
+                triggerClassName="text-gray-600 hover:text-red-400 transition-colors"
+              >
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </ConfirmButton>
             </div>
           </div>
         ))}

@@ -3,6 +3,9 @@ import { auth } from '@/server/auth';
 import { getTenantClient } from '@signflow/db';
 import { getMinio, snapshotUrlToKey } from '@/lib/minio';
 
+// Never let Next.js cache this route — snapshots update frequently.
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,13 +29,13 @@ export async function GET(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   try {
-    // Short-lived presigned URL (5 min) avoids streaming complexity while keeping
-    // snapshots off the public bucket policy. The URL is tenant-scoped above.
+    // Short-lived presigned URL (5 min). The ?v= timestamp in lastSnapshot ensures
+    // each upload produces a unique MinIO URL, so the browser always follows the
+    // redirect to a URL it hasn't seen before and fetches fresh bytes.
     const rawUrl = await getMinio().presignedGetObject(
       process.env.MINIO_BUCKET!,
       key,
       5 * 60,
-      { 'response-cache-control': 'no-store' },
     );
 
     // Replace internal MinIO hostname with the configured public URL
@@ -41,7 +44,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.redirect(presignedUrl, {
       status: 302,
-      headers: { 'Cache-Control': 'no-store' },
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      },
     });
   } catch {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });

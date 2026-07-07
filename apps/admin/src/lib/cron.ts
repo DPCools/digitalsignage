@@ -1,7 +1,8 @@
 import cron from 'node-cron';
 import { publicClient, getTenantClient } from '@signflow/db';
 import { emitToOrg, emitToScreen } from '@/server/socket';
-import { sendPushToOrg } from '@/lib/webpush';
+import { resolveListEmails, sendEventEmail } from '@/lib/email-templates';
+import { stopAlertAudio } from '@/lib/audio-bridge';
 
 let started = false;
 
@@ -30,6 +31,7 @@ export function startCronJobs() {
               } else {
                 alert.screenIds.forEach((id) => emitToScreen(slug, id, 'alert:clear'));
               }
+              stopAlertAudio(alert.id);
             }
 
             // Notify screens when content items expire mid-play
@@ -60,7 +62,12 @@ export function startCronJobs() {
             // Mark screens offline if heartbeat older than 2 minutes
             const goingOffline = await db.screen.findMany({
               where: { isOnline: true, lastHeartbeat: { lt: twoMinAgo } },
-              select: { id: true, name: true },
+              select: {
+                id: true,
+                name: true,
+                lastHeartbeat: true,
+                group: { select: { name: true, location: true } },
+              },
             });
 
             if (goingOffline.length > 0) {
@@ -69,14 +76,31 @@ export function startCronJobs() {
                 data: { isOnline: false },
               });
 
-              for (const screen of goingOffline) {
-                sendPushToOrg(slug, {
-                  title: 'Screen offline',
-                  body: `${screen.name} has gone offline`,
-                  url: `/screens/${screen.id}`,
-                }).catch((err) =>
-                  console.error('[push] failed to notify for screen:', screen.id, err)
-                );
+              // Recipients: the lists assigned to the SCREEN_OFFLINE template, with
+              // a fallback to the legacy smtp_notification_emails setting so existing
+              // setups keep working until recipient lists are configured.
+              const offlineTpl = await db.emailTemplate.findUnique({
+                where: { event: 'SCREEN_OFFLINE' },
+                select: { recipientListIds: true },
+              });
+              let recipients = await resolveListEmails(db, offlineTpl?.recipientListIds ?? []);
+              if (recipients.length === 0) {
+                const legacy = await db.orgSetting.findUnique({ where: { key: 'smtp_notification_emails' } });
+                recipients = (legacy?.value ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+              }
+
+              if (recipients.length > 0) {
+                for (const screen of goingOffline) {
+                  const location = screen.group
+                    ? (screen.group.location || screen.group.name)
+                    : '—';
+                  void sendEventEmail(db, 'SCREEN_OFFLINE', {
+                    screenName: screen.name,
+                    location,
+                    offlineAt: now.toLocaleString('en-GB'),
+                    lastHeartbeat: screen.lastHeartbeat ? screen.lastHeartbeat.toLocaleString('en-GB') : '—',
+                  }, recipients);
+                }
               }
             }
           } catch (err) {

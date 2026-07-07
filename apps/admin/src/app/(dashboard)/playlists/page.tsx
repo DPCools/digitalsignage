@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getTenantClient } from '@signflow/db';
 import Link from 'next/link';
 import { CreatePlaylistButtonClient } from '@/components/playlists/CreatePlaylistButtonClient';
+import { DeletePlaylistButton } from '@/components/playlists/DeletePlaylistButton';
 
 export default async function PlaylistsPage() {
   const session = await auth();
@@ -27,22 +28,24 @@ export default async function PlaylistsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {playlists.map((pl) => (
-            <Link
-              key={pl.id}
-              href={`/playlists/${pl.id}`}
-              className="block rounded-xl border border-gray-800 bg-gray-900 p-5 hover:border-gray-600 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="font-semibold text-white truncate">{pl.name}</h2>
-                {pl.isDefault && (
-                  <span className="shrink-0 text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded-full">Default</span>
+            <div key={pl.id} className="relative">
+              <Link
+                href={`/playlists/${pl.id}`}
+                className="block rounded-xl border border-gray-800 bg-gray-900 p-5 hover:border-gray-600 transition-colors"
+              >
+                <div className="flex items-center gap-2 pr-8">
+                  <h2 className="font-semibold text-white truncate">{pl.name}</h2>
+                  {pl.isDefault && (
+                    <span className="shrink-0 text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded-full">Default</span>
+                  )}
+                </div>
+                {pl.description && (
+                  <p className="mt-1 text-sm text-gray-400 line-clamp-2">{pl.description}</p>
                 )}
-              </div>
-              {pl.description && (
-                <p className="mt-1 text-sm text-gray-400 line-clamp-2">{pl.description}</p>
-              )}
-              <p className="mt-3 text-sm text-gray-500">{pl._count.items} item{pl._count.items !== 1 ? 's' : ''}</p>
-            </Link>
+                <p className="mt-3 text-sm text-gray-500">{pl._count.items} item{pl._count.items !== 1 ? 's' : ''}</p>
+              </Link>
+              <DeletePlaylistButton id={pl.id} name={pl.name} />
+            </div>
           ))}
         </div>
       )}

@@ -5,6 +5,8 @@ import type { EmergencyAlertConfig } from '@signflow/types';
 import { isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { emitToOrg, emitToScreen } from '@/server/socket';
+import { pushAlertAudio, stopAlertAudio } from '@/lib/audio-bridge';
+import { resolveListEmails, sendEventEmail } from '@/lib/email-templates';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -118,8 +120,11 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
         backgroundColor: template.backgroundColor,
         textColor: template.textColor,
         severity: template.severity,
+        soundUrl: template.soundUrl,
+        soundRepeat: template.soundRepeat,
         templateId: template.id,
         screenIds,
+        recipientListIds: template.recipientListIds,
         isActive: true,
         expiresAt: template.autoExpireMinutes
           ? new Date(Date.now() + template.autoExpireMinutes * 60_000)
@@ -136,6 +141,7 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
     } else {
       existing.screenIds.forEach((id) => emitToScreen(orgSlug, id, 'alert:clear'));
     }
+    stopAlertAudio(existing.id);
   }
 
   // Emit socket event for the new alert
@@ -149,6 +155,8 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
     isActive: true,
     severity: alert.severity as EmergencyAlertConfig['severity'],
     expiresAt: alert.expiresAt?.toISOString(),
+    soundUrl: alert.soundUrl ?? undefined,
+    soundRepeat: alert.soundRepeat,
   };
 
   if (screenIds.length === 0) {
@@ -156,6 +164,19 @@ async function handleTrigger(req: NextRequest): Promise<NextResponse> {
   } else {
     alert.screenIds.forEach((id) => emitToScreen(orgSlug, id, 'alert:emergency', payload));
   }
+  void pushAlertAudio(db, alert.id, alert.screenIds, alert.soundUrl, alert.soundRepeat);
+
+  // Email the alert to the template's recipient lists (fire-and-forget).
+  void (async () => {
+    const recipients = await resolveListEmails(db, alert.recipientListIds);
+    await sendEventEmail(db, 'ALERT_TRIGGERED', {
+      alertTitle: alert.title,
+      alertMessage: alert.message,
+      severity: alert.severity,
+      triggeredAt: alert.createdAt.toLocaleString('en-GB'),
+      screens: alert.screenIds.length === 0 ? 'All screens' : `${alert.screenIds.length} screen(s)`,
+    }, recipients);
+  })().catch((err) => console.error('[email] ALERT_TRIGGERED dispatch failed:', err));
 
   // Update lastUsedAt
   await db.apiKey.update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } });

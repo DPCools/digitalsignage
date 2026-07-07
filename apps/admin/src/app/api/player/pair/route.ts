@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { publicClient } from '@signflow/db';
+import { publicClient, getTenantClient } from '@signflow/db';
 import { nanoid } from 'nanoid';
-import { generatePlayerToken } from '@/lib/player-auth';
+import { generateOpaqueToken } from '@/lib/player-auth';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,10 +22,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ pending: true }, { status: 202, headers: CORS });
   }
 
+  // Issue an opaque token and persist it as the screen's token of record —
+  // verification is by DB lookup, so this survives any future
+  // PLAYER_TOKEN_SECRET rotation.
+  const token = generateOpaqueToken();
+  const db = getTenantClient(pairing.orgSlug);
+  await db.screen.update({ where: { id: pairing.screenId }, data: { authToken: token } });
+
   return NextResponse.json({
     screenId: pairing.screenId,
     orgSlug: pairing.orgSlug,
-    token: generatePlayerToken(pairing.screenId, pairing.orgSlug),
+    token,
   }, { headers: CORS });
 }
 

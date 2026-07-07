@@ -1,9 +1,11 @@
 'use client';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getGridPreset } from '@signflow/types';
 import { trpc } from '@/lib/trpc-client';
+import { LayoutPresetPicker, type CellConfigEntry } from './LayoutPresetPicker';
 import { GripVertical, Trash2, Check, Loader2, Plus } from 'lucide-react';
 
 type ContentItem = {
@@ -15,9 +17,28 @@ type PlaylistItemRow = {
   duration: number; transition: TransitionType; zone: string;
   contentItem: ContentItem;
 };
-type Playlist = { id: string; name: string; items: PlaylistItemRow[] };
+type Playlist = {
+  id: string; name: string; items: PlaylistItemRow[];
+  layoutPreset: string | null; cellConfig: unknown;
+};
 
-const ZONES = ['main', 'ticker', 'clock', 'weather'] as const;
+// Fallback cell list for playlists with no grid layoutPreset set — today's
+// exact 4-zone layout, unchanged.
+const LEGACY_CELLS = [
+  { id: 'main', label: 'Main' },
+  { id: 'ticker', label: 'Ticker' },
+  { id: 'clock', label: 'Clock' },
+  { id: 'weather', label: 'Weather' },
+];
+
+function parseCellConfigEntries(raw: unknown): CellConfigEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (e): e is CellConfigEntry =>
+      e && typeof e === 'object' && typeof e.cellId === 'string' && (e.mode === 'FIXED' || e.mode === 'DYNAMIC')
+  );
+}
+
 const TRANSITIONS: { value: TransitionType; label: string }[] = [
   { value: 'FADE',        label: 'Fade' },
   { value: 'SLIDE_LEFT',  label: 'Slide ←' },
@@ -51,12 +72,14 @@ function Preview({ item, className }: { item: ContentItem; className?: string })
 type SaveState = 'idle' | 'saving' | 'saved';
 
 function SortableItem({
-  item, onRemove, onUpdate, saveState,
+  item, cells, onRemove, onUpdate, saveState, error,
 }: {
   item: PlaylistItemRow;
+  cells: { id: string; label: string }[];
   onRemove: (id: string) => void;
   onUpdate: (id: string, field: string, value: unknown) => void;
   saveState: SaveState;
+  error?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -133,19 +156,19 @@ function SortableItem({
 
         {/* Zone — pill radio buttons */}
         <div className="flex items-center gap-3">
-          <span className="w-20 text-xs text-gray-400 shrink-0">Zone</span>
+          <span className="w-20 text-xs text-gray-400 shrink-0">Cell</span>
           <div className="flex gap-1 flex-wrap">
-            {ZONES.map((z) => (
+            {cells.map((c) => (
               <button
-                key={z}
-                onClick={() => onUpdate(item.id, 'zone', z)}
+                key={c.id}
+                onClick={() => onUpdate(item.id, 'zone', c.id)}
                 className={`rounded-full px-3 py-0.5 text-xs font-medium transition-colors ${
-                  item.zone === z
+                  item.zone === c.id
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                 }`}
               >
-                {z.charAt(0).toUpperCase() + z.slice(1)}
+                {c.label}
               </button>
             ))}
           </div>
@@ -171,6 +194,8 @@ function SortableItem({
           </div>
         </div>
 
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
       </div>
     </div>
   );
@@ -185,18 +210,62 @@ export function PlaylistBuilder({ playlist, allContent }: {
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const dirtyItems = useRef<Map<string, PlaylistItemRow>>(new Map());
 
+  const [layoutPreset, setLayoutPreset] = useState<string | null>(playlist.layoutPreset);
+  const [cellConfig, setCellConfig] = useState<CellConfigEntry[]>(parseCellConfigEntries(playlist.cellConfig));
+  const cells = useMemo(
+    () => getGridPreset(layoutPreset)?.cells.map((c) => ({ id: c.id, label: c.label })) ?? LEGACY_CELLS,
+    [layoutPreset]
+  );
+
+  const [itemErrors, setItemErrors] = useState<Map<string, string>>(new Map());
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const showItemError = useCallback((id: string, message: string) => {
+    setItemErrors((prev) => new Map(prev).set(id, message));
+    setTimeout(() => setItemErrors((prev) => { const next = new Map(prev); next.delete(id); return next; }), 4000);
+  }, []);
+
   const reorder  = trpc.playlists.reorderItems.useMutation();
   const remove   = trpc.playlists.removeItem.useMutation({
     onSuccess: (_, vars) => setItems((prev) => prev.filter((i) => i.id !== vars.id)),
   });
   const addItem  = trpc.playlists.addItem.useMutation({
     onSuccess: (item: unknown) => setItems((prev) => [...prev, item as PlaylistItemRow]),
+    onError: (error) => {
+      setAddError(error.message);
+      setTimeout(() => setAddError(null), 4000);
+    },
   });
   const updateItem = trpc.playlists.updateItem.useMutation();
 
   const setSaveState = useCallback((id: string, state: SaveState) => {
     setSaveStates((prev) => new Map(prev).set(id, state));
   }, []);
+
+  // When the layout preset changes, any item whose zone doesn't exist as a
+  // cell in the new preset would otherwise be silently orphaned — invisible
+  // in this picker (no pill matches) AND dropped entirely by the player,
+  // since PlaylistEngine only queues items into zones the preset actually
+  // defines. Reassign orphaned items to the new preset's first cell so
+  // content is never silently lost.
+  function handleLayoutChange(newPreset: string | null, newCellConfig: CellConfigEntry[]) {
+    setLayoutPreset(newPreset);
+    setCellConfig(newCellConfig);
+
+    const validZoneIds = newPreset
+      ? getGridPreset(newPreset)?.cells.map((c) => c.id) ?? []
+      : LEGACY_CELLS.map((c) => c.id);
+    const fallbackZone = validZoneIds[0] ?? 'main';
+
+    setItems((prev) => prev.map((item) => {
+      if (validZoneIds.includes(item.zone)) return item;
+      updateItem.mutate(
+        { id: item.id, zone: fallbackZone },
+        { onError: (error) => showItemError(item.id, error.message) }
+      );
+      return { ...item, zone: fallbackZone };
+    }));
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -213,6 +282,10 @@ export function PlaylistBuilder({ playlist, allContent }: {
   }
 
   function handleUpdate(id: string, field: string, value: unknown) {
+    // Snapshot for revert if the server rejects this change (e.g. moving a
+    // second item into an already-full fixed cell).
+    const previousItem = items.find((i) => i.id === id);
+
     // Update local state immediately
     setItems((prev) => {
       const updated = prev.map((i) => (i.id === id ? { ...i, [field]: value } : i));
@@ -238,7 +311,11 @@ export function PlaylistBuilder({ playlist, allContent }: {
             setSaveState(id, 'saved');
             setTimeout(() => setSaveState(id, 'idle'), 2000);
           },
-          onError: () => setSaveState(id, 'idle'),
+          onError: (error) => {
+            setSaveState(id, 'idle');
+            if (previousItem) setItems((prev) => prev.map((i) => (i.id === id ? previousItem : i)));
+            showItemError(id, error.message);
+          },
         }
       );
     }, 600);
@@ -251,13 +328,22 @@ export function PlaylistBuilder({ playlist, allContent }: {
     .reduce((s, i) => s + i.duration, 0);
 
   return (
-    <div className="flex gap-0 h-[calc(100vh-5rem)]">
+    <div className="flex flex-col gap-3 h-[calc(100vh-5rem)]">
+      <LayoutPresetPicker
+        playlistId={playlist.id}
+        layoutPreset={layoutPreset}
+        cellConfig={cellConfig}
+        onChange={handleLayoutChange}
+      />
+
+    <div className="flex gap-0 flex-1 min-h-0">
 
       {/* ── Content library ── */}
       <div className="w-52 shrink-0 flex flex-col gap-3 pr-4 border-r border-gray-800">
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">
           Content Library
         </h2>
+        {addError && <p className="text-xs text-red-400">{addError}</p>}
         <div className="flex-1 overflow-y-auto space-y-0.5">
           {allContent.map((c) => (
             <button
@@ -305,9 +391,11 @@ export function PlaylistBuilder({ playlist, allContent }: {
                 <SortableItem
                   key={item.id}
                   item={item}
+                  cells={cells}
                   onRemove={(id) => remove.mutate({ id })}
                   onUpdate={handleUpdate}
                   saveState={saveStates.get(item.id) ?? 'idle'}
+                  error={itemErrors.get(item.id)}
                 />
               ))}
             </SortableContext>
@@ -322,6 +410,7 @@ export function PlaylistBuilder({ playlist, allContent }: {
         </div>
       </div>
 
+    </div>
     </div>
   );
 }

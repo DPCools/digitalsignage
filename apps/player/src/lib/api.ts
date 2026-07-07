@@ -60,6 +60,20 @@ export async function sendSnapshot(
   }).catch(() => null);
 }
 
+export async function checkSnapshotTrigger(
+  screenId: string,
+  orgSlug: string
+): Promise<boolean> {
+  const headers = await authHeaders();
+  const res = await fetch(
+    `${BASE}/api/player/snapshot-trigger?screenId=${encodeURIComponent(screenId)}&orgSlug=${encodeURIComponent(orgSlug)}`,
+    { headers }
+  ).catch(() => null);
+  if (!res?.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  return data.pending === true;
+}
+
 export async function reportError(
   orgSlug: string,
   screenId: string,

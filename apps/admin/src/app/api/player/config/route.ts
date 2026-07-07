@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import type { PlayerConfig } from '@signflow/types';
-import { verifyPlayerToken, generateStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyAndSyncPlayerToken, generateStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { parseCellConfig } from '@/lib/layout';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,11 +23,11 @@ export async function GET(req: NextRequest) {
   if (!isSafeOrgSlug(orgSlug) || !isSafeId(screenId)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
-  if (!verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   const db = getTenantClient(orgSlug);
+  if (!(await verifyAndSyncPlayerToken(db, screenId, orgSlug, req.headers.get('authorization')))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const [screen, playlists, schedules, activeAlert] = await Promise.all([
     db.screen.findUnique({
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest) {
       id: p.id,
       name: p.name,
       isDefault: p.isDefault,
+      layoutPreset: p.layoutPreset,
+      cellModes: parseCellConfig(p.cellConfig),
       items: p.items
         .filter((item) => !item.contentItem.expiresAt || item.contentItem.expiresAt > new Date())
         .map((item) => ({
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
         url: item.contentItem.url,
         duration: item.duration,
         transition: item.transition as PlayerConfig['playlists'][0]['items'][0]['transition'],
-        zone: item.zone as 'main' | 'ticker' | 'clock' | 'weather',
+        zone: item.zone,
         metadata: item.contentItem.metadata as Record<string, unknown> | undefined,
       })),
     })),
@@ -92,6 +95,8 @@ export async function GET(req: NextRequest) {
           isActive: activeAlert.isActive,
           severity: activeAlert.severity as 'EMERGENCY' | 'WARNING' | 'INFO',
           expiresAt: activeAlert.expiresAt?.toISOString(),
+          soundUrl: activeAlert.soundUrl ?? undefined,
+          soundRepeat: activeAlert.soundRepeat,
         }
       : null,
     timezone: 'UTC',

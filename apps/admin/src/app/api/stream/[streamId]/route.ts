@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { spawn, type ChildProcess } from 'child_process';
 import { getTenantClient } from '@signflow/db';
-import { verifyPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyAndSyncPlayerToken, verifyStreamToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 import { tryAcquireTranscode, releaseTranscode, RTSP_HARD_CAP } from '@/lib/rtsp-semaphore';
 import { SETTING_DEFAULTS } from '@/server/trpc/routers/settings';
 
@@ -163,17 +163,17 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
 
+  const db = getTenantClient(orgSlug);
+
   // Two accepted auth paths:
   // 1. Authorization: Bearer <playerToken> header (server-to-server / testing)
   // 2. ?token=<streamToken> query param — used by <img src> which cannot set headers.
   const tokenParam = req.nextUrl.searchParams.get('token');
-  const bearerOk  = verifyPlayerToken(screenId, orgSlug, req.headers.get('authorization'));
+  const bearerOk  = await verifyAndSyncPlayerToken(db, screenId, orgSlug, req.headers.get('authorization'));
   const streamOk  = verifyStreamToken(screenId, orgSlug, tokenParam);
   if (!bearerOk && !streamOk) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const db = getTenantClient(orgSlug);
 
   const item = await db.contentItem.findUnique({ where: { id: contentItemId } });
 

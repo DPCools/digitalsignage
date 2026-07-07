@@ -13,8 +13,8 @@ export function DebugOverlay({ state, screenId, orgSlug, visible }: {
       <p>Screen: {screenId}</p>
       <p>Org: {orgSlug}</p>
       <p>Playlist: {state.activePlaylist?.name ?? 'none'}</p>
-      {(['main', 'ticker'] as const).map((z) => (
-        <p key={z}>{z}: {state.zones[z].currentItem?.id ?? 'none'}</p>
+      {Object.keys(state.zones).map((z) => (
+        <p key={z}>{z}{state.zones[z].isFixed ? ' (fixed)' : ''}: {state.zones[z].currentItem?.id ?? 'none'}</p>
       ))}
     </div>
   );

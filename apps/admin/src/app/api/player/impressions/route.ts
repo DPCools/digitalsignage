@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantClient } from '@signflow/db';
 import type { ImpressionsRequest } from '@signflow/types';
-import { verifyPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
+import { verifyAndSyncPlayerToken, isSafeOrgSlug, isSafeId } from '@/lib/player-auth';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,11 +22,10 @@ export async function POST(req: NextRequest) {
   if (!screenId || !isSafeOrgSlug(body.orgSlug) || !isSafeId(screenId)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 });
   }
-  if (!verifyPlayerToken(screenId, body.orgSlug, req.headers.get('authorization'))) {
+  const db = getTenantClient(body.orgSlug);
+  if (!(await verifyAndSyncPlayerToken(db, screenId, body.orgSlug, req.headers.get('authorization')))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const db = getTenantClient(body.orgSlug);
 
   // Filter out impressions whose content items have been deleted to avoid FK violations
   const contentItemIds = [...new Set(body.impressions.map((i) => i.contentItemId))];

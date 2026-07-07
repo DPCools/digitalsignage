@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { Layers, Plus, Trash2, Pencil, Monitor, ListVideo } from 'lucide-react';
+import { Layers, Plus, Trash2, Pencil, Monitor, ListVideo, Volume2 } from 'lucide-react';
+import AudioBridgeList from './AudioBridgeList';
+import { ConfirmButton } from '@/components/ui/ConfirmButton';
 
 type GroupType = 'SITE' | 'LOCATION' | 'DEPARTMENT' | 'OTHER';
 
@@ -25,7 +27,7 @@ export default function GroupsPage() {
   const { data: groups, refetch } = trpc.screenGroups.list.useQuery();
   const { data: allScreens } = trpc.screens.list.useQuery();
   const { data: allPlaylists } = trpc.playlists.list.useQuery();
-  const create = trpc.screenGroups.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); setForm(EMPTY_FORM); } });
+  const create = trpc.screenGroups.create.useMutation({ onSuccess: () => { setActiveTab(form.type); refetch(); setShowForm(false); setForm(EMPTY_FORM); } });
   const update = trpc.screenGroups.update.useMutation({ onSuccess: () => { refetch(); setEditing(null); } });
   const remove = trpc.screenGroups.delete.useMutation({ onSuccess: () => refetch() });
   const setScreens = trpc.screenGroups.setScreens.useMutation({ onSuccess: () => { refetch(); setManagingGroup(null); } });
@@ -36,6 +38,8 @@ export default function GroupsPage() {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [managingGroup, setManagingGroup] = useState<{ id: string; name: string } | null>(null);
   const [selectedScreenIds, setSelectedScreenIds] = useState<Set<string>>(new Set());
+  const [managingBridges, setManagingBridges] = useState<{ id: string; name: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<GroupType>('SITE');
 
   function startEdit(g: { id: string; name: string; type: string; location: string | null; description: string | null; defaultPlaylistId: string | null }) {
     setEditing(g.id);
@@ -56,11 +60,7 @@ export default function GroupsPage() {
     });
   }
 
-  const grouped = Object.entries(TYPE_LABELS).map(([type, label]) => ({
-    type: type as GroupType,
-    label,
-    items: (groups ?? []).filter((g) => g.type === type),
-  })).filter((g) => g.items.length > 0);
+  const activeItems = (groups ?? []).filter((g) => g.type === activeTab);
 
   return (
     <div className="space-y-6">
@@ -82,11 +82,34 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {grouped.map(({ type, label, items }) => (
-        <div key={type} className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</h2>
+      {(groups?.length ?? 0) > 0 && (
+        <>
+          <div className="flex gap-1 border-b border-gray-800">
+            {(Object.entries(TYPE_LABELS) as [GroupType, string][]).map(([type, label]) => {
+              const count = (groups ?? []).filter((g) => g.type === type).length;
+              const active = activeTab === type;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setActiveTab(type)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    active ? 'border-blue-500 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  {label}
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${active ? 'bg-blue-900 text-blue-300' : 'bg-gray-800 text-gray-500'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="space-y-2">
-            {items.map((g) => (
+            {activeItems.length === 0 && (
+              <p className="text-sm text-gray-500 py-8 text-center">No {TYPE_LABELS[activeTab].toLowerCase()} groups yet.</p>
+            )}
+            {activeItems.map((g) => (
               <div key={g.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
                 {editing === g.id ? (
                   <div className="space-y-3">
@@ -154,6 +177,13 @@ export default function GroupsPage() {
                           {g.location && <span>{g.location} ·</span>}
                           <Monitor className="h-3 w-3 inline-block" />
                           <span>{g._count.screens} screen{g._count.screens !== 1 ? 's' : ''}</span>
+                          {g._count.audioBridges > 0 && (
+                            <>
+                              <span>·</span>
+                              <Volume2 className="h-3 w-3 inline-block" />
+                              <span>{g._count.audioBridges} audio bridge{g._count.audioBridges !== 1 ? 's' : ''}</span>
+                            </>
+                          )}
                           {g.defaultPlaylist ? (
                             <>
                               <span>·</span>
@@ -174,24 +204,35 @@ export default function GroupsPage() {
                         <Monitor className="h-3.5 w-3.5" />
                         Assign Screens
                       </button>
+                      <button
+                        onClick={() => setManagingBridges({ id: g.id, name: g.name })}
+                        className="flex items-center gap-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" />
+                        Audio Bridges
+                      </button>
                       <button onClick={() => startEdit(g)} className="text-gray-600 hover:text-white transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => remove.mutate({ id: g.id })}
-                        disabled={remove.isPending}
-                        className="text-gray-600 hover:text-red-400 transition-colors"
+                      <ConfirmButton
+                        onConfirm={() => remove.mutate({ id: g.id })}
+                        pending={remove.isPending}
+                        error={remove.error?.message}
+                        title="Delete group?"
+                        message={<>Permanently delete <span className="font-medium text-white">{g.name}</span>? Its screens will be unassigned and any audio bridges in it will be deleted. This can&rsquo;t be undone.</>}
+                        triggerAriaLabel="Delete group"
+                        triggerClassName="text-gray-600 hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </ConfirmButton>
                     </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </div>
-      ))}
+        </>
+      )}
 
       {/* New group modal */}
       {showForm && (
@@ -298,6 +339,15 @@ export default function GroupsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Audio bridges modal */}
+      {managingBridges && (
+        <AudioBridgeList
+          groupId={managingBridges.id}
+          groupName={managingBridges.name}
+          onClose={() => setManagingBridges(null)}
+        />
       )}
     </div>
   );

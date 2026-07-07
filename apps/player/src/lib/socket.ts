@@ -2,6 +2,7 @@ import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents } from '@signflow/types';
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
+let onConnect: (() => void) | null = null;
 
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (socket) return socket;
@@ -14,7 +15,11 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 
 export function connectSocket(screenId: string, orgSlug: string) {
   const s = getSocket();
+  // Replace the previous handler so React Strict Mode double-invoke doesn't
+  // accumulate duplicate 'connect' listeners on the singleton socket.
+  if (onConnect) s.off('connect', onConnect);
+  onConnect = () => s.emit('screen:join', { screenId, orgSlug });
+  s.on('connect', onConnect);
   s.connect();
-  s.on('connect', () => s.emit('screen:join', { screenId, orgSlug }));
   return s;
 }

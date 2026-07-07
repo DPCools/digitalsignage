@@ -14,6 +14,10 @@ import { settingsRouter } from './routers/settings';
 import { usersRouter } from './routers/users';
 import { auditRouter } from './routers/audit';
 import { pushRouter } from './routers/push';
+import { alertSoundsRouter } from './routers/alertSounds';
+import { audioBridgesRouter } from './routers/audioBridges';
+import { recipientListsRouter } from './routers/recipientLists';
+import { emailTemplatesRouter } from './routers/emailTemplates';
 
 export const appRouter = router({
   orgs: orgsRouter,
@@ -31,6 +35,10 @@ export const appRouter = router({
   users: usersRouter,
   audit: auditRouter,
   push: pushRouter,
+  alertSounds: alertSoundsRouter,
+  audioBridges: audioBridgesRouter,
+  recipientLists: recipientListsRouter,
+  emailTemplates: emailTemplatesRouter,
 });
 
 export type AppRouter = typeof appRouter;
