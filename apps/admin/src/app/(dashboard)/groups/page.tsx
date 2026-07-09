@@ -27,6 +27,7 @@ export default function GroupsPage() {
   const { data: groups, refetch } = trpc.screenGroups.list.useQuery();
   const { data: allScreens } = trpc.screens.list.useQuery();
   const { data: allPlaylists } = trpc.playlists.list.useQuery();
+  const playlistOptions: { id: string; name: string }[] = allPlaylists ?? [];
   const create = trpc.screenGroups.create.useMutation({ onSuccess: () => { setActiveTab(form.type); refetch(); setShowForm(false); setForm(EMPTY_FORM); } });
   const update = trpc.screenGroups.update.useMutation({ onSuccess: () => { refetch(); setEditing(null); } });
   const remove = trpc.screenGroups.delete.useMutation({ onSuccess: () => refetch() });
@@ -148,7 +149,7 @@ export default function GroupsPage() {
                         onChange={(e) => setEditForm((f) => ({ ...f, defaultPlaylistId: e.target.value }))}
                       >
                         <option value="">No default playlist</option>
-                        {allPlaylists?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {playlistOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
                     <div className="flex gap-2 justify-end">
@@ -273,7 +274,7 @@ export default function GroupsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, defaultPlaylistId: e.target.value }))}
                 >
                   <option value="">No default playlist</option>
-                  {allPlaylists?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {playlistOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
             </div>
