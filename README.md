@@ -18,11 +18,16 @@ Open-source digital signage platform. Multi-tenant, real-time, offline-capable.
 ```sh
 cp .env.example .env
 # Edit .env — set NEXTAUTH_SECRET and other secrets
-docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml up -d --build
 ```
 
 Admin: http://localhost  
 Player: http://localhost/pair
+
+`NEXT_PUBLIC_*` vars (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SOCKET_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`) are
+inlined into the client bundle at *build* time, not read at container runtime — they must be set in `.env`
+before running `up --build`, and any later change to them requires a rebuild (`up -d --build`) to take effect,
+not just a restart.
 
 ## Development
 

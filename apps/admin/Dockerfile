@@ -16,7 +16,9 @@ COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=deps /app/apps/admin/node_modules ./apps/admin/node_modules
 COPY . .
 RUN pnpm --filter @signflow/db db:generate
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=${NEXT_PUBLIC_VAPID_PUBLIC_KEY} \
+    NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @signflow/admin build
 
 FROM node:20-alpine AS runner
