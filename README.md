@@ -22,12 +22,19 @@ docker compose -f infra/docker-compose.yml up -d --build
 ```
 
 Admin: http://localhost  
-Player: http://localhost/pair
+Player: http://player.localhost/pair (most browsers resolve `*.localhost` to
+127.0.0.1 automatically; see below for why player needs its own host)
 
 `NEXT_PUBLIC_*` vars (`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SOCKET_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`) are
 inlined into the client bundle at *build* time, not read at container runtime — they must be set in `.env`
 before running `up --build`, and any later change to them requires a rebuild (`up -d --build`) to take effect,
 not just a restart.
+
+Player is served on a `player.` subdomain, not a path under the main domain. Admin and player are two
+separate Next.js apps that each generate `/_next/static/...` asset URLs at their own root — sharing one
+origin means whichever app isn't matched by nginx's catch-all 404s on its own JS/CSS the moment you load
+it. In production, add a DNS record and reverse-proxy entry for `player.<your-domain>` pointing at the
+same server; `infra/nginx/nginx.conf` already routes any `player.*` hostname to the player app.
 
 ## Development
 

@@ -41,7 +41,32 @@ same restriction there.
   left off, real-time updates to players/dashboard silently break.
 - SSL tab: request a new Let's Encrypt certificate, enable "Force SSL".
 
-## 4. Switch the app's public URLs to https://
+## 4. Add a second host for the player subdomain
+
+Admin and player are separate Next.js apps that both generate
+`/_next/static/...` asset URLs at their own root — sharing one hostname means
+whichever app nginx's catch-all doesn't match 404s on its own JS/CSS the
+moment it loads. `infra/nginx/nginx.conf` already routes any `player.*`
+hostname straight to the player app, so:
+
+- DNS: add an A record (or CNAME) for `player.bigmotoringworld.digitalsignflow.co.uk`
+  pointing at the same target as the main domain (NPM machine's IP, or
+  whatever your main record points at).
+- NPM: add a second Proxy Host for `player.bigmotoringworld.digitalsignflow.co.uk`,
+  same Forward Hostname/IP and Port (`80`) as the main host, Websockets
+  Support **ON**, and its own Let's Encrypt certificate + Force SSL.
+
+Kiosks/screens should then use `https://player.bigmotoringworld.digitalsignflow.co.uk/pair`,
+not a `/pair` path under the main domain.
+
+> Note: the request that surfaced this (a `172.67.146.167` remote address on
+> a 404'd asset) came from a Cloudflare edge IP, meaning Cloudflare is
+> already proxying this domain — separately from, or possibly in front of,
+> the NPM setup here. If so, add the `player.` subdomain in Cloudflare's DNS
+> the same way (proxied, pointing at whatever the main record points at)
+> rather than only in NPM.
+
+## 5. Switch the app's public URLs to https://
 
 In `.env` on this VPS:
 
