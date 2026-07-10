@@ -1,4 +1,4 @@
-CREATE TABLE "AuditLog" (
+CREATE TABLE IF NOT EXISTS "AuditLog" (
     "id"         TEXT NOT NULL,
     "action"     TEXT NOT NULL,
     "actorId"    TEXT NOT NULL,
@@ -9,4 +9,4 @@ CREATE TABLE "AuditLog" (
     "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT now(),
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
-CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt" DESC);
+CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt" DESC);

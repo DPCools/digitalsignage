@@ -1,2 +1,2 @@
-ALTER TABLE "Playlist" ADD COLUMN "layoutPreset" TEXT;
-ALTER TABLE "Playlist" ADD COLUMN "cellConfig" JSONB;
+ALTER TABLE "Playlist" ADD COLUMN IF NOT EXISTS "layoutPreset" TEXT;
+ALTER TABLE "Playlist" ADD COLUMN IF NOT EXISTS "cellConfig" JSONB;
