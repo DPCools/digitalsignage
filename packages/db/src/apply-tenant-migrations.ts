@@ -16,78 +16,14 @@
  * schema and are applied in filename order, idempotently.
  */
 
-import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import { getMigrationFiles, migrateSchema } from './tenant-migrations-core';
 
 const MIGRATIONS_DIR = path.join(
   __dirname,
   '../prisma/tenant-migrations'
 );
-
-const MIGRATION_TABLE = '_TenantMigrations';
-
-interface MigrationRecord {
-  migration_name: string;
-  applied_at: Date;
-}
-
-async function ensureMigrationTable(client: Client, schema: string): Promise<void> {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS "${schema}"."${MIGRATION_TABLE}" (
-      migration_name TEXT NOT NULL PRIMARY KEY,
-      applied_at     TIMESTAMP NOT NULL DEFAULT now()
-    )
-  `);
-}
-
-async function getAppliedMigrations(
-  client: Client,
-  schema: string
-): Promise<Set<string>> {
-  const result = await client.query<MigrationRecord>(
-    `SELECT migration_name FROM "${schema}"."${MIGRATION_TABLE}" ORDER BY migration_name`
-  );
-  return new Set(result.rows.map((r) => r.migration_name));
-}
-
-async function applyMigration(
-  client: Client,
-  schema: string,
-  migrationName: string,
-  sql: string
-): Promise<void> {
-  // Set search_path so unqualified table names resolve to the tenant schema.
-  await client.query(`SET search_path TO "${schema}", public`);
-  await client.query('BEGIN');
-  try {
-    await client.query(sql);
-    await client.query(
-      `INSERT INTO "${schema}"."${MIGRATION_TABLE}" (migration_name) VALUES ($1)`,
-      [migrationName]
-    );
-    await client.query('COMMIT');
-    console.log(`  [ok] ${migrationName}`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  }
-}
-
-async function getMigrationFiles(): Promise<Array<{ name: string; sql: string }>> {
-  const entries = fs
-    .readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return entries.map((dir) => {
-    const sqlPath = path.join(MIGRATIONS_DIR, dir.name, 'migration.sql');
-    if (!fs.existsSync(sqlPath)) {
-      throw new Error(`Missing migration.sql in ${dir.name}`);
-    }
-    return { name: dir.name, sql: fs.readFileSync(sqlPath, 'utf-8') };
-  });
-}
 
 async function getTenantSchemaSlugs(client: Client): Promise<string[]> {
   const result = await client.query<{ schema_name: string }>(
@@ -97,25 +33,6 @@ async function getTenantSchemaSlugs(client: Client): Promise<string[]> {
      ORDER BY schema_name`
   );
   return result.rows.map((r) => r.schema_name);
-}
-
-async function migrateSchema(
-  client: Client,
-  schema: string,
-  migrations: Array<{ name: string; sql: string }>
-): Promise<void> {
-  await ensureMigrationTable(client, schema);
-  const applied = await getAppliedMigrations(client, schema);
-
-  const pending = migrations.filter((m) => !applied.has(m.name));
-  if (pending.length === 0) {
-    console.log(`  (no pending migrations)`);
-    return;
-  }
-
-  for (const migration of pending) {
-    await applyMigration(client, schema, migration.name, migration.sql);
-  }
 }
 
 async function main(): Promise<void> {
@@ -132,7 +49,7 @@ async function main(): Promise<void> {
   await client.connect();
 
   try {
-    const migrations = await getMigrationFiles();
+    const migrations = getMigrationFiles(MIGRATIONS_DIR);
     console.log(`Found ${migrations.length} migration(s): ${migrations.map((m) => m.name).join(', ')}`);
 
     let schemas: string[];

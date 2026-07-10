@@ -30,7 +30,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/admin/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/public ./apps/admin/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/socket-gateway.mjs ./apps/admin/socket-gateway.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma/tenant-migrations ./prisma/tenant-migrations
 USER nextjs
 EXPOSE 3000 3002
-ENV PORT=3000 HOSTNAME="0.0.0.0"
+ENV PORT=3000 HOSTNAME="0.0.0.0" TENANT_MIGRATIONS_DIR=/app/prisma/tenant-migrations
 CMD ["sh", "-c", "node apps/admin/socket-gateway.mjs & node apps/admin/server.js"]
