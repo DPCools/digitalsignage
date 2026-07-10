@@ -141,12 +141,14 @@ services:
         condition: service_healthy
       player:
         condition: service_healthy
-    # No host port published — Nginx Proxy Manager (running separately on this
-    # VPS) reaches this container over the shared `npm_shared` network below
-    # and terminates SSL there. See NPM_SETUP.md.
+    # Published on host port 80 — Nginx Proxy Manager runs on a separate
+    # machine and reaches this VPS over the network on that port, terminating
+    # SSL on its end. See NPM_SETUP.md.
+    ports:
+      - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    networks: [signflow_net, npm_shared]
+    networks: [signflow_net]
 
 volumes:
   postgres_data:
@@ -156,5 +158,3 @@ volumes:
 networks:
   signflow_net:
     driver: bridge
-  npm_shared:
-    external: true
