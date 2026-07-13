@@ -31,6 +31,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/.next/static ./apps/ad
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/public ./apps/admin/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/admin/socket-gateway.mjs ./apps/admin/socket-gateway.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma/tenant-migrations ./prisma/tenant-migrations
+
+# socket-gateway.mjs runs as a plain Node script outside Next's build/trace
+# graph (it's invoked directly by node, not through the Next.js server), so
+# Next's file-tracing never copies its dependencies into .next/standalone's
+# node_modules. Install them explicitly here, pinned to the exact versions
+# resolved in the workspace pnpm-lock.yaml — this runner stage isn't part
+# of the pnpm workspace, so `pnpm install` isn't meaningful here.
+RUN npm install --no-save --omit=dev \
+      socket.io@4.8.3 \
+      @socket.io/redis-adapter@8.3.0 \
+      ioredis@5.11.1 \
+    && chown -R nextjs:nodejs node_modules
+
 USER nextjs
 EXPOSE 3000 3002
 ENV PORT=3000 HOSTNAME="0.0.0.0" TENANT_MIGRATIONS_DIR=/app/prisma/tenant-migrations
