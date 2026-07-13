@@ -35,14 +35,23 @@ COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma/tenant-migrati
 # socket-gateway.mjs runs as a plain Node script outside Next's build/trace
 # graph (it's invoked directly by node, not through the Next.js server), so
 # Next's file-tracing never copies its dependencies into .next/standalone's
-# node_modules. Install them explicitly here, pinned to the exact versions
-# resolved in the workspace pnpm-lock.yaml — this runner stage isn't part
-# of the pnpm workspace, so `pnpm install` isn't meaningful here.
-RUN npm install --no-save --omit=dev \
+# node_modules. Resolve them in a completely ISOLATED directory rather than
+# running npm install directly inside the existing node_modules Next
+# already populated: Next's generated standalone package.json has no
+# "dependencies" field at all (it relies on files just being physically
+# present, not on manifest declarations), so npm's install reconciliation
+# treated everything undeclared as extraneous and deleted it — including
+# `next` itself, which broke the container outright. Copying the resolved
+# packages in at the filesystem level afterward is purely additive and
+# never triggers that reconciliation.
+RUN mkdir -p /tmp/gateway-deps && cd /tmp/gateway-deps && \
+    npm install --no-save --omit=dev \
       socket.io@4.8.3 \
       @socket.io/redis-adapter@8.3.0 \
-      ioredis@5.11.1 \
-    && chown -R nextjs:nodejs node_modules
+      ioredis@5.11.1 && \
+    cp -r /tmp/gateway-deps/node_modules/. /app/apps/admin/node_modules/ && \
+    rm -rf /tmp/gateway-deps && \
+    chown -R nextjs:nodejs /app/apps/admin/node_modules
 
 USER nextjs
 EXPOSE 3000 3002
