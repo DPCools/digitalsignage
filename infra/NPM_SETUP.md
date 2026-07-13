@@ -46,25 +46,34 @@ same restriction there.
 Admin and player are separate Next.js apps that both generate
 `/_next/static/...` asset URLs at their own root — sharing one hostname means
 whichever app nginx's catch-all doesn't match 404s on its own JS/CSS the
-moment it loads. `infra/nginx/nginx.conf` already routes any `player.*`
-hostname straight to the player app, so:
+moment it loads. `infra/nginx/nginx.conf` already routes any hostname whose
+*first* label is `player` straight to the player app — it doesn't care how
+many labels come after that — so:
 
-- DNS: add an A record (or CNAME) for `player.bigmotoringworld.digitalsignflow.co.uk`
-  pointing at the same target as the main domain (NPM machine's IP, or
-  whatever your main record points at).
-- NPM: add a second Proxy Host for `player.bigmotoringworld.digitalsignflow.co.uk`,
-  same Forward Hostname/IP and Port (`80`) as the main host, Websockets
+- **Use a single-level subdomain of your base domain** — e.g.
+  `player.digitalsignflow.co.uk` — **not** a second level nested under an
+  org subdomain (`player.bigmotoringworld.digitalsignflow.co.uk`).
+  Cloudflare's free Universal SSL certificate only covers the apex domain
+  plus *one* wildcard level (`*.digitalsignflow.co.uk`); a second level
+  isn't covered by that cert at all and will fail TLS negotiation
+  (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH`) even once the DNS record exists,
+  unless you pay for Cloudflare's Advanced Certificate Manager add-on.
+  The player app is a single shared instance for the whole platform
+  anyway (org context comes from the pairing token stored on the device,
+  not the hostname), so a single-level subdomain is also the more
+  correct fit, not just the cheaper one.
+- DNS: add an A record (or CNAME) for `player.digitalsignflow.co.uk`
+  pointing at the same target as your main domain record — if that
+  record is proxied through Cloudflare (orange cloud), proxy this one
+  too, the same way.
+- If you're also using NPM (rather than relying on Cloudflare alone for
+  TLS): add a second Proxy Host for `player.digitalsignflow.co.uk`, same
+  Forward Hostname/IP and Port (`80`) as the main host, Websockets
   Support **ON**, and its own Let's Encrypt certificate + Force SSL.
 
-Kiosks/screens should then use `https://player.bigmotoringworld.digitalsignflow.co.uk/pair`,
-not a `/pair` path under the main domain.
-
-> Note: the request that surfaced this (a `172.67.146.167` remote address on
-> a 404'd asset) came from a Cloudflare edge IP, meaning Cloudflare is
-> already proxying this domain — separately from, or possibly in front of,
-> the NPM setup here. If so, add the `player.` subdomain in Cloudflare's DNS
-> the same way (proxied, pointing at whatever the main record points at)
-> rather than only in NPM.
+Kiosks/screens should then use `https://player.digitalsignflow.co.uk/pair`,
+not a `/pair` path under the admin domain, and not a subdomain nested
+under the org's own subdomain.
 
 ## 5. Switch the app's public URLs to https://
 
