@@ -147,7 +147,18 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mount the containing directory, not the single file, and point
+      # nginx at the file inside it via `-c` below. Docker's bind mount
+      # for an individual file pins that file's specific inode at
+      # container-creation time; `git pull` replaces files via
+      # write-new+rename, which leaves a single-file mount pointing at
+      # the old, now-detached inode forever — edits silently stop
+      # applying even after `nginx -s reload` or `docker compose up -d`
+      # (which won't recreate this container unless docker-compose.yml
+      # itself changed). Mounting the directory means the file lookup
+      # happens live on every reload/restart, so this can't happen again.
+      - ./nginx:/etc/nginx/conf:ro
+    command: ["nginx", "-c", "/etc/nginx/conf/nginx.conf", "-g", "daemon off;"]
     networks: [signflow_net]
 
 volumes:
