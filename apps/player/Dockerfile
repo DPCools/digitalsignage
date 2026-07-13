@@ -26,6 +26,12 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 RUN apk add --no-cache curl
 COPY --from=builder --chown=nextjs:nodejs /app/apps/player/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/player/.next/static ./apps/player/.next/static
+# public/ (manifest.json, favicon, and the PWA service worker + workbox
+# runtime that @ducanh2912/next-pwa generates at build time) is excluded
+# from Next's standalone tracing like any other static asset dir — must be
+# copied explicitly, from this same builder stage so the hashed
+# swe-worker-*.js/workbox-*.js filenames sw.js references stay in sync.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/player/public ./apps/player/public
 USER nextjs
 EXPOSE 3001
 ENV PORT=3001 HOSTNAME="0.0.0.0"
