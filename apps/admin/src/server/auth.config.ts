@@ -13,6 +13,7 @@ export const authConfig: NextAuthConfig = {
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
         token.role = (user as { role: string }).role;
         token.orgId = (user as { orgId: string }).orgId;
         token.orgSlug = (user as { orgSlug: string }).orgSlug;
@@ -21,6 +22,7 @@ export const authConfig: NextAuthConfig = {
     },
     session({ session, token }) {
       session.user.id = token.id as string;
+      session.user.name = token.name as string | undefined;
       session.user.role = token.role as string;
       session.user.orgId = token.orgId as string;
       session.user.orgSlug = token.orgSlug as string;

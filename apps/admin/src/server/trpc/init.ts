@@ -9,6 +9,7 @@ export interface TRPCContext {
     user: {
       id: string;
       email: string;
+      name?: string;
       role: string;
       orgId: string;
       orgSlug: string;

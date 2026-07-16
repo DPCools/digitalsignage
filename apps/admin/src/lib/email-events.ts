@@ -31,6 +31,7 @@ export const EMAIL_EVENTS: EmailEventDef[] = [
       { key: 'inviteLink', label: 'Join link' },
       { key: 'orgName', label: 'Organisation' },
       { key: 'inviterName', label: 'Invited by' },
+      { key: 'membersName', label: 'Their name' },
       { key: 'email', label: 'Their email' },
       { key: 'role', label: 'Role' },
       { key: 'expiresAt', label: 'Invite expires' },

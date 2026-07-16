@@ -88,7 +88,8 @@ export const usersRouter = router({
       await sendEventEmail(ctx.db, 'USER_INVITED', {
         inviteLink: `${baseUrl}/invite/${token}`,
         orgName: org?.name ?? ctx.session.user.orgSlug,
-        inviterName: ctx.session.user.email,
+        inviterName: ctx.session.user.name ?? ctx.session.user.email,
+        membersName: input.name ?? input.email,
         email: input.email,
         role: input.role,
         expiresAt: expiresAt.toLocaleString('en-GB'),
