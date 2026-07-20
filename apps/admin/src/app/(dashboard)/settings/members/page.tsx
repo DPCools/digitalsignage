@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { trpc } from '@/lib/trpc-client';
 import { UserPlus, Trash2, Copy, Check, Shield, Clock } from 'lucide-react';
 
@@ -39,6 +40,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function MembersPage() {
+  const { data: session } = useSession();
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.users.list.useQuery();
   const invite = trpc.users.invite.useMutation({
@@ -210,6 +212,11 @@ export default function MembersPage() {
                   <td className="px-6 py-3">
                     {user.role === 'SUPER_ADMIN' ? (
                       <RoleBadge role={user.role} />
+                    ) : user.id === session?.user?.id ? (
+                      <div className="flex flex-col">
+                        <RoleBadge role={user.role} />
+                        <p className="text-xs text-muted-foreground mt-1">You can&apos;t change your own role</p>
+                      </div>
                     ) : (
                       <div className="flex flex-col">
                         <select
@@ -227,7 +234,7 @@ export default function MembersPage() {
                   </td>
                   <td className="px-6 py-3 text-xs text-gray-500">{formatDate(user.createdAt)}</td>
                   <td className="px-6 py-3 text-right">
-                    {user.role !== 'SUPER_ADMIN' && (
+                    {user.role !== 'SUPER_ADMIN' && user.id !== session?.user?.id && (
                       <button
                         onClick={() => { if (confirm(`Remove ${user.email}?`)) remove.mutate({ userId: user.id }); }}
                         className="rounded p-1.5 text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors"
