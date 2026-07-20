@@ -394,6 +394,68 @@ function AlertHistoryResetSection() {
   );
 }
 
+// Hidden "danger zone" for wiping the audit log. Same reveal gesture as
+// AlertHistoryResetSection — hold Ctrl+Shift+Alt together.
+function AuditLogResetSection() {
+  const [revealed, setRevealed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [removed, setRemoved] = useState<number | null>(null);
+
+  const reset = trpc.audit.resetHistory.useMutation({
+    onSuccess: (r) => {
+      setConfirming(false);
+      setRemoved(r.count);
+    },
+  });
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey && e.altKey) setRevealed(true);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  if (!revealed) return null;
+
+  return (
+    <section className="rounded-xl border border-red-900/50 bg-red-950/20 divide-y divide-red-900/30">
+      <div className="px-6 py-4 flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 text-red-400" />
+        <h2 className="text-sm font-semibold text-red-300 uppercase tracking-wider">Danger Zone</h2>
+      </div>
+      <div className="px-6 py-5 flex items-start justify-between gap-8">
+        <div className="flex-1">
+          <p className="text-sm font-medium text-white">Clear audit log</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Permanently deletes every audit log entry.
+            {removed !== null && (
+              <span className="text-green-400"> Removed {removed} entr{removed === 1 ? 'y' : 'ies'}.</span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={() => setConfirming(true)}
+          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-red-800/50 bg-red-950/40 px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-900/50 transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Clear audit log
+        </button>
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        title="Clear audit log?"
+        message="This permanently deletes every audit log entry. This can’t be undone."
+        confirmLabel="Clear log"
+        pending={reset.isPending}
+        error={reset.error?.message}
+        onConfirm={() => reset.mutate()}
+        onCancel={() => setConfirming(false)}
+      />
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <Suspense fallback={<div className="max-w-2xl h-40" />}>
@@ -431,6 +493,7 @@ function SettingsContent() {
         <div className="space-y-4">
           <AlertSoundsSection />
           <AlertHistoryResetSection />
+          <AuditLogResetSection />
         </div>
       )}
 

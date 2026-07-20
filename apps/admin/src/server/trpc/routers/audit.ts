@@ -21,4 +21,11 @@ export const auditRouter = router({
 
       return { logs: rows, nextCursor };
     }),
+
+  // Wipes all audit log entries. Admin-only; surfaced behind the same
+  // easter egg in settings as the alert-history reset.
+  resetHistory: adminProcedure.mutation(async ({ ctx }) => {
+    const { count } = await ctx.db.auditLog.deleteMany({});
+    return { count };
+  }),
 });
