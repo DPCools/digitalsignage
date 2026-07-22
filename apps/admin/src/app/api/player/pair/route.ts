@@ -18,7 +18,14 @@ export async function GET(req: NextRequest) {
   if (!code) return NextResponse.json({ error: 'Missing code' }, { status: 400, headers: CORS });
 
   const pairing = await publicClient.pairingCode.findUnique({ where: { code } });
+
   if (!pairing?.screenId || !pairing.orgSlug) {
+    // Not claimed yet — distinguish "still waiting" from "expired/invalid" so
+    // the player's poll loop knows when to regenerate a fresh code instead of
+    // polling a dead code forever.
+    if (!pairing || pairing.expiresAt < new Date()) {
+      return NextResponse.json({ error: 'Pairing code expired' }, { status: 410, headers: CORS });
+    }
     return NextResponse.json({ pending: true }, { status: 202, headers: CORS });
   }
 
