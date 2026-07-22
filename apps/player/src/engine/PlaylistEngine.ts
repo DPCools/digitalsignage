@@ -1,7 +1,7 @@
 import type { PlayerConfig, PlaylistConfig, PlaylistItemConfig, Zone } from '@signflow/types';
 import { getGridPreset, LEGACY_ZONE_IDS } from '@signflow/types';
 import { resolveActivePlaylist } from './scheduler';
-import { queueImpression, getCachedAsset, cacheAsset } from '@/lib/db';
+import { queueImpression } from '@/lib/db';
 import { sendImpressions } from '@/lib/api';
 
 export type ZoneState = {
@@ -93,7 +93,6 @@ export class PlaylistEngine {
     const zones = this.buildZoneQueues(playlist);
     this.setState({ activePlaylist: playlist, zones });
     this.startAllZones();
-    this.preloadForAllZones();
   }
 
   private playlistFingerprint(playlist: PlaylistConfig | null): string {
@@ -195,39 +194,8 @@ export class PlaylistEngine {
     // Schedule next
     this.scheduleNextTick(zone);
 
-    // Preload the item after next
-    this.preloadNext(zone);
-
     // Re-check schedule (might need to switch playlist)
     this.reconcile(new Date());
-  }
-
-  private async preloadForAllZones() {
-    for (const zone of Object.keys(this.state.zones)) {
-      await this.preloadNext(zone);
-    }
-  }
-
-  private async preloadNext(zone: Zone) {
-    const zoneState = this.state.zones[zone];
-    if (zoneState.items.length < 2) return;
-    const nextIndex = (zoneState.currentIndex + 1) % zoneState.items.length;
-    const nextItem = zoneState.items[nextIndex];
-    if (!nextItem?.url) return;
-    // Videos stream from the server — blob-caching them wastes memory and breaks range requests
-    if (nextItem.type === 'VIDEO') return;
-
-    const cached = await getCachedAsset(nextItem.url);
-    if (cached) return;
-
-    try {
-      const res = await fetch(nextItem.url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      await cacheAsset(nextItem.url, blobUrl);
-    } catch {
-      // Preload failure is non-fatal — will use original URL as fallback
-    }
   }
 
   private clearAllTimers() {

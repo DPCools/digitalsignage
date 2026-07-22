@@ -69,8 +69,10 @@ function makeStoreProxy(store: MockStore) {
 let currentMockDB: MockDB = createMockDB();
 
 vi.mock('idb', () => ({
-  openDB: vi.fn((_name: string, _version: number, { upgrade }: { upgrade: (db: unknown) => void }) => {
-    // Run upgrade callback with a db-proxy that can createObjectStore
+  openDB: vi.fn((_name: string, _version: number, { upgrade }: { upgrade: (db: unknown, oldVersion: number) => void }) => {
+    // Run upgrade callback with a db-proxy that can createObjectStore. The mock
+    // always simulates a brand-new database, so oldVersion is always 0 — same
+    // as a real first-ever openDB call, which is the only case tested here.
     const upgradeProxy = {
       createObjectStore: (storeName: string, opts?: { autoIncrement?: boolean }) => {
         const store: MockStore = {
@@ -82,8 +84,14 @@ vi.mock('idb', () => ({
         currentMockDB.stores.set(storeName, store);
         return makeStoreProxy(store);
       },
+      deleteObjectStore: (storeName: string) => {
+        currentMockDB.stores.delete(storeName);
+      },
+      objectStoreNames: {
+        contains: (storeName: string) => currentMockDB.stores.has(storeName),
+      },
     };
-    upgrade(upgradeProxy);
+    upgrade(upgradeProxy, 0);
 
     // Return a db-proxy
     const dbProxy = {

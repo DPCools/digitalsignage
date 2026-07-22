@@ -1,31 +1,30 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { PlayerConfig, ImpressionRecord } from '@signflow/types';
 
-// New random value every page load — used to detect stale blob URLs from previous sessions.
-// crypto.randomUUID is unavailable on older TV/Pi browsers so fall back to Math.random.
-const SESSION_ID: string =
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
 export interface SignFlowDB {
   config: { key: 'main'; value: { screenId: string; orgSlug: string; token: string } };
   playlist: { key: 'main'; value: PlayerConfig };
   impressions: { key: number; value: ImpressionRecord; indexes: { byTime: string } };
-  assets: { key: string; value: { url: string; blobUrl: string; cachedAt: number; sessionId?: string } };
 }
 
 let _db: IDBPDatabase<SignFlowDB> | null = null;
 
 export async function getDB(): Promise<IDBPDatabase<SignFlowDB>> {
   if (_db) return _db;
-  _db = await openDB<SignFlowDB>('signflow-player', 1, {
-    upgrade(db) {
-      db.createObjectStore('config');
-      db.createObjectStore('playlist');
-      const impressions = db.createObjectStore('impressions', { autoIncrement: true });
-      impressions.createIndex('byTime', 'playedAt');
-      db.createObjectStore('assets');
+  _db = await openDB<SignFlowDB>('signflow-player', 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) {
+        db.createObjectStore('config');
+        db.createObjectStore('playlist');
+        const impressions = db.createObjectStore('impressions', { autoIncrement: true });
+        impressions.createIndex('byTime', 'playedAt');
+      }
+      // v2: asset caching moved to Cache Storage via the service worker
+      // (apps/player/src/lib/assetCache.ts) — the old per-session blob-URL
+      // store was evicted on every reload by design, which was the bug.
+      if (oldVersion < 2 && db.objectStoreNames.contains('assets')) {
+        db.deleteObjectStore('assets');
+      }
     },
   });
   return _db;
@@ -63,21 +62,4 @@ export async function flushImpressions(): Promise<ImpressionRecord[]> {
   await tx.store.clear();
   await tx.done;
   return all;
-}
-
-export async function getCachedAsset(url: string): Promise<string | null> {
-  const db = await getDB();
-  const entry = await db.get('assets', url);
-  if (!entry) return null;
-  // Blob URLs are session-local — evict any entry from a previous session
-  if (entry.blobUrl.startsWith('blob:') && entry.sessionId !== SESSION_ID) {
-    await db.delete('assets', url);
-    return null;
-  }
-  return entry.blobUrl;
-}
-
-export async function cacheAsset(url: string, blobUrl: string) {
-  const db = await getDB();
-  return db.put('assets', { url, blobUrl, cachedAt: Date.now(), sessionId: SESSION_ID }, url);
 }

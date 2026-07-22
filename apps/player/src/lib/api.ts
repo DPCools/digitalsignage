@@ -1,5 +1,6 @@
 import type { PlayerConfig, ImpressionRecord } from '@signflow/types';
 import { flushImpressions, getConfig } from './db';
+import { reportHttpSuccess, reportHttpFailure } from './connectivity';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -14,12 +15,18 @@ export async function fetchPlayerConfig(
   orgSlug: string
 ): Promise<PlayerConfig> {
   const headers = await authHeaders();
-  const res = await fetch(
-    `${BASE}/api/player/config?screenId=${encodeURIComponent(screenId)}&orgSlug=${encodeURIComponent(orgSlug)}`,
-    { headers }
-  );
-  if (!res.ok) throw new Error(`Config fetch failed: ${res.status}`);
-  return res.json();
+  try {
+    const res = await fetch(
+      `${BASE}/api/player/config?screenId=${encodeURIComponent(screenId)}&orgSlug=${encodeURIComponent(orgSlug)}`,
+      { headers }
+    );
+    if (!res.ok) throw new Error(`Config fetch failed: ${res.status}`);
+    reportHttpSuccess();
+    return await res.json();
+  } catch (err) {
+    reportHttpFailure();
+    throw err;
+  }
 }
 
 export async function sendHeartbeat(
@@ -33,7 +40,14 @@ export async function sendHeartbeat(
     method: 'POST',
     headers,
     body: JSON.stringify({ screenId, orgSlug, playlistId, contentId }),
-  }).catch(() => null);
+  }).then((res) => {
+    if (res.ok) reportHttpSuccess();
+    else reportHttpFailure();
+    return res;
+  }).catch(() => {
+    reportHttpFailure();
+    return null;
+  });
 }
 
 export async function sendImpressions(orgSlug: string, screenId: string) {

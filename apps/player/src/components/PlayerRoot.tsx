@@ -5,9 +5,13 @@ import { PlaylistEngine, type EngineState } from '@/engine/PlaylistEngine';
 import { ScreenLayout } from './ScreenLayout';
 import { EmergencyOverlay } from './EmergencyOverlay';
 import { DebugOverlay } from './DebugOverlay';
+import { ConnectivityPill } from './ConnectivityPill';
 import { fetchPlayerConfig, sendHeartbeat, checkSnapshotTrigger } from '@/lib/api';
 import { getConfig, getPlayerConfig, setPlayerConfig } from '@/lib/db';
 import { connectSocket } from '@/lib/socket';
+import { registerServiceWorker } from '@/lib/serviceWorker';
+import { warmPlaylistAssets, pruneUnreferencedAssets } from '@/lib/assetCache';
+import { initConnectivityWatchers, subscribeConnectivity } from '@/lib/connectivity';
 
 const ZONES_INIT: EngineState['zones'] = {
   main:    { zone: 'main',    items: [], currentIndex: 0, currentItem: null, isFixed: false },
@@ -35,6 +39,10 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
     if (!engineRef.current) return;
     engineRef.current.load(config);
     if (config.activeAlert?.isActive) setAlert(config.activeAlert);
+    // Fire-and-forget: proactively cache everything this config references so a
+    // later offline reboot has it all already, and drop anything no longer used.
+    warmPlaylistAssets(config);
+    pruneUnreferencedAssets(config);
   }, []);
 
   useEffect(() => {
@@ -46,6 +54,8 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
     let currentState: EngineState = { activePlaylist: null, zones: ZONES_INIT };
 
     async function init() {
+      registerServiceWorker();
+
       const cfg = await getConfig();
       if (!cfg) return;
       const { orgSlug: slug } = cfg;
@@ -159,6 +169,16 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
       snapshotInitTimer = setTimeout(takeSnapshot, 15_000);
       snapshotTimer     = setInterval(takeSnapshot, 5 * 60 * 1000);
 
+      // Connectivity — "repair" sequence: when the player was unreachable and
+      // becomes reachable again, re-fetch the latest config (in case anything
+      // changed while offline) rather than silently keep running on whatever
+      // was cached. Socket rejoin is already automatic (onConnect below fires
+      // on every reconnect, not just the first).
+      const stopConnectivityWatchers = initConnectivityWatchers();
+      const unsubscribeConnectivity = subscribeConnectivity((reachable) => {
+        if (reachable) fetchPlayerConfig(screenId, slug).then(loadConfig).catch(() => null);
+      });
+
       // Socket — fast-path: immediate capture when admin is watching and
       // the player is already connected. Reliable path is the triggerPoll above.
       const socket = connectSocket(screenId, slug);
@@ -188,6 +208,8 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         clearInterval(triggerPoll);
         clearTimeout(snapshotInitTimer);
         clearInterval(snapshotTimer);
+        stopConnectivityWatchers();
+        unsubscribeConnectivity();
         socket.off('playlist:update',  handlePlaylistUpdate);
         socket.off('alert:emergency',  setAlert);
         socket.off('alert:clear',      handleAlertClear);
@@ -216,6 +238,7 @@ export function PlayerRoot({ screenId }: { screenId: string }) {
         onVideoEnd={(zone) => engineRef.current?.tick(zone)}
       />
       <DebugOverlay state={engineState} screenId={screenId} orgSlug={orgSlug} visible={debug} />
+      <ConnectivityPill />
     </>
   );
 }

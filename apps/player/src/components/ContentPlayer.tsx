@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { PlaylistItemConfig } from '@signflow/types';
-import { getCachedAsset } from '@/lib/db';
 
 const VIDEO_ERROR_ADVANCE_MS = 4000;
 
@@ -174,17 +173,8 @@ export function ContentPlayer({
   streamToken?: string;
   onVideoEnd?: () => void;
 }) {
-  const [src, setSrc] = useState(item.url);
   const [videoError, setVideoError] = useState(false);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Blob cache only for non-video — blob URLs break HTTP range requests and fail on TV browsers
-  useEffect(() => {
-    if (item.type === 'VIDEO') return;
-    getCachedAsset(item.url).then((cached) => {
-      if (cached) setSrc(cached);
-    });
-  }, [item.url, item.type]);
 
   // Reset error state when item changes
   useEffect(() => {
@@ -207,11 +197,10 @@ export function ContentPlayer({
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src}
+          src={item.url}
           alt=""
           style={{ ...fill, objectFit: 'contain', background: '#000' }}
           loading="eager"
-          onError={() => setSrc(item.url)}
         />
       );
 
@@ -225,6 +214,14 @@ export function ContentPlayer({
         );
       }
       return (
+        // No crossOrigin attribute here on purpose — the element's own request
+        // stays no-cors/opaque, which is fine for playback. Offline/Range-sliced
+        // caching doesn't depend on this element's request mode at all: the
+        // service worker (next.config.ts) caches a real, non-opaque copy ahead
+        // of time via assetCache.ts's plain fetch(url, { mode: 'cors' }), then
+        // slices *that* cached copy to serve this element's range requests from
+        // Cache Storage. Adding crossOrigin here would just start requiring
+        // CORS for this element's requests too, for no benefit — don't "fix" it.
         <video
           // key forces a fresh element on item change — no stale src or paused state
           key={item.id}
@@ -252,7 +249,7 @@ export function ContentPlayer({
     case 'HTML_TEMPLATE':
       return (
         <iframe
-          src={src}
+          src={item.url}
           style={{ ...fill, border: 'none' }}
           sandbox="allow-scripts"
           title="content"

@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import withPWA from '@ducanh2912/next-pwa';
+import { CACHE_NAMES } from './src/lib/cacheNames';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -40,12 +41,19 @@ export default withPWA({
           },
         },
       },
-      // CacheFirst for all media assets — immutable once stored
+      // CacheFirst for all media assets — immutable once stored (upload keys are
+      // content-addressed, apps/admin/src/lib/minio.ts, so a URL's bytes never change)
       {
         urlPattern: /\.(mp4|webm|mov|avi)$/i,
         handler: 'CacheFirst',
         options: {
-          cacheName: 'media-video',
+          cacheName: CACHE_NAMES.video,
+          // Lets the SW serve 206 Partial Content from cache so <video> range
+          // requests (seeking, metadata probing) work against cached files —
+          // requires the cache entry itself to be a non-opaque response, i.e.
+          // populated via a same-context fetch() (assetCache.ts), not the
+          // <video> element's own no-cors request.
+          rangeRequests: true,
           expiration: {
             maxEntries: 50,
             maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
@@ -56,7 +64,7 @@ export default withPWA({
         urlPattern: /\.(jpg|jpeg|png|webp|gif|svg|avif)$/i,
         handler: 'CacheFirst',
         options: {
-          cacheName: 'media-images',
+          cacheName: CACHE_NAMES.images,
           expiration: {
             maxEntries: 200,
             maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -67,7 +75,7 @@ export default withPWA({
         urlPattern: /\.pdf$/i,
         handler: 'CacheFirst',
         options: {
-          cacheName: 'media-pdf',
+          cacheName: CACHE_NAMES.pdf,
           expiration: {
             maxEntries: 30,
             maxAgeSeconds: 7 * 24 * 60 * 60,
@@ -79,7 +87,7 @@ export default withPWA({
         urlPattern: /\/uploads\/.+\.html$/i,
         handler: 'CacheFirst',
         options: {
-          cacheName: 'media-html',
+          cacheName: CACHE_NAMES.html,
           expiration: {
             maxEntries: 50,
             maxAgeSeconds: 7 * 24 * 60 * 60,
