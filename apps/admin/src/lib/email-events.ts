@@ -128,16 +128,6 @@ export const EMAIL_EVENTS: EmailEventDef[] = [
                 </td>
               </tr>
 
-              <!-- Fallback link -->
-              <tr>
-                <td align="center" style="padding:4px 0 4px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                  <p style="margin:0; font-size:13px; line-height:20px; color:#6B7280;">
-                    Button not working? Paste this link into your browser:<br />
-                    <a href="{{inviteLink}}" target="_blank" style="color:#0891B2; text-decoration:none; word-break:break-all;">{{inviteLink}}</a>
-                  </p>
-                </td>
-              </tr>
-
               <!-- Divider -->
               <tr><td style="padding:24px 0 0;"><div style="border-top:1px solid #E5E9F0; font-size:0; line-height:0;">&nbsp;</div></td></tr>
 
