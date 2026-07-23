@@ -97,6 +97,65 @@ export const analyticsRouter = router({
       }));
     }),
 
+  contentByScreen: tenantProcedure
+    .input(daysInput.extend({ screenId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - input.days * 86400000);
+      const rows = await ctx.db.impression.groupBy({
+        by: ['contentItemId'],
+        _count: { contentItemId: true },
+        _sum:   { durationMs: true },
+        where: { screenId: input.screenId, playedAt: { gte: since } },
+        orderBy: { _count: { contentItemId: 'desc' } },
+      });
+
+      const ids = rows.map((r) => r.contentItemId);
+      const items = ids.length
+        ? await ctx.db.contentItem.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, type: true },
+          })
+        : [];
+      const itemMap = Object.fromEntries(items.map((i) => [i.id, i]));
+
+      return rows.map((r) => ({
+        contentItemId: r.contentItemId,
+        name:     itemMap[r.contentItemId]?.name ?? '(deleted)',
+        type:     itemMap[r.contentItemId]?.type ?? '',
+        plays:    r._count.contentItemId,
+        totalMs:  r._sum.durationMs ?? 0,
+      }));
+    }),
+
+  screensByContent: tenantProcedure
+    .input(daysInput.extend({ contentItemId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - input.days * 86400000);
+      const rows = await ctx.db.impression.groupBy({
+        by: ['screenId'],
+        _count: { contentItemId: true },
+        _sum:   { durationMs: true },
+        where: { contentItemId: input.contentItemId, playedAt: { gte: since } },
+        orderBy: { _count: { contentItemId: 'desc' } },
+      });
+
+      const ids = rows.map((r) => r.screenId);
+      const screens = ids.length
+        ? await ctx.db.screen.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true },
+          })
+        : [];
+      const screenMap = Object.fromEntries(screens.map((s) => [s.id, s]));
+
+      return rows.map((r) => ({
+        screenId: r.screenId,
+        name:     screenMap[r.screenId]?.name ?? '(deleted)',
+        plays:    r._count.contentItemId,
+        totalMs:  r._sum.durationMs ?? 0,
+      }));
+    }),
+
   impressionsByContent: tenantProcedure
     .input(z.object({ contentItemId: z.string(), days: z.number().default(7) }))
     .query(({ ctx, input }) => {

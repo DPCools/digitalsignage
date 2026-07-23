@@ -2,31 +2,8 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { trpc } from '@/lib/trpc-client';
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function fmtMs(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60)   return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
-
-function fmtType(type: string): string {
-  return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function downloadCsv(filename: string, rows: string[][]): void {
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  const csv = rows.map((r) => r.map(escape).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: filename });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+import { fmtMs, fmtType, downloadCsv } from '@/lib/format';
+import { DrillDownModal, type DrillDownSubject } from '@/components/analytics/DrillDownModal';
 
 // ─── period selector ─────────────────────────────────────────────────────────
 
@@ -51,7 +28,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 // ─── by-content table ────────────────────────────────────────────────────────
 
-function ByContentTable({ days }: { days: Days }) {
+function ByContentTable({ days, onSelect }: { days: Days; onSelect: (subject: DrillDownSubject) => void }) {
   const { data, isLoading } = trpc.analytics.byContent.useQuery({ days });
 
   function exportCsv() {
@@ -91,7 +68,11 @@ function ByContentTable({ days }: { days: Days }) {
             </thead>
             <tbody className="divide-y divide-gray-800/60">
               {data?.map((row) => (
-                <tr key={row.contentItemId} className="hover:bg-gray-800/20 transition-colors">
+                <tr
+                  key={row.contentItemId}
+                  onClick={() => onSelect({ type: 'content', id: row.contentItemId, name: row.name })}
+                  className="hover:bg-gray-800/20 transition-colors cursor-pointer"
+                >
                   <td className="px-5 py-3 text-white font-medium max-w-[240px]">
                     <span className="block truncate" title={row.name}>{row.name}</span>
                   </td>
@@ -117,7 +98,7 @@ function ByContentTable({ days }: { days: Days }) {
 
 // ─── by-screen table ─────────────────────────────────────────────────────────
 
-function ByScreenTable({ days }: { days: Days }) {
+function ByScreenTable({ days, onSelect }: { days: Days; onSelect: (subject: DrillDownSubject) => void }) {
   const { data, isLoading } = trpc.analytics.byScreen.useQuery({ days });
 
   function exportCsv() {
@@ -157,7 +138,11 @@ function ByScreenTable({ days }: { days: Days }) {
             </thead>
             <tbody className="divide-y divide-gray-800/60">
               {data?.map((row) => (
-                <tr key={row.screenId} className="hover:bg-gray-800/20 transition-colors">
+                <tr
+                  key={row.screenId}
+                  onClick={() => onSelect({ type: 'screen', id: row.screenId, name: row.name })}
+                  className="hover:bg-gray-800/20 transition-colors cursor-pointer"
+                >
                   <td className="px-5 py-3 text-white font-medium">{row.name}</td>
                   <td className="px-5 py-3 text-white tabular-nums text-right">{row.plays.toLocaleString()}</td>
                   <td className="px-5 py-3 text-gray-400 tabular-nums text-right hidden sm:table-cell">{row.uniqueContent}</td>
@@ -181,6 +166,7 @@ function ByScreenTable({ days }: { days: Days }) {
 
 export default function AnalyticsPage() {
   const [days, setDays] = useState<Days>(30);
+  const [drillDown, setDrillDown] = useState<DrillDownSubject | null>(null);
 
   const { data: byContent } = trpc.analytics.byContent.useQuery({ days });
   const { data: byScreen  } = trpc.analytics.byScreen.useQuery({ days });
@@ -221,10 +207,19 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Per-content breakdown */}
-      <ByContentTable days={days} />
+      <ByContentTable days={days} onSelect={setDrillDown} />
 
       {/* Per-screen breakdown */}
-      <ByScreenTable days={days} />
+      <ByScreenTable days={days} onSelect={setDrillDown} />
+
+      {drillDown && (
+        <DrillDownModal
+          subject={drillDown}
+          days={days}
+          onClose={() => setDrillDown(null)}
+          onPivot={setDrillDown}
+        />
+      )}
     </div>
   );
 }
