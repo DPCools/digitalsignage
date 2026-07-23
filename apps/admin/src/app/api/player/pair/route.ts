@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { publicClient, getTenantClient } from '@signflow/db';
 import { nanoid } from 'nanoid';
 import { generateOpaqueToken } from '@/lib/player-auth';
+import { isPairingCodeExpired } from '@/lib/pairing';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     // Not claimed yet — distinguish "still waiting" from "expired/invalid" so
     // the player's poll loop knows when to regenerate a fresh code instead of
     // polling a dead code forever.
-    if (!pairing || pairing.expiresAt < new Date()) {
+    if (!pairing || isPairingCodeExpired(pairing)) {
       return NextResponse.json({ error: 'Pairing code expired' }, { status: 410, headers: CORS });
     }
     return NextResponse.json({ pending: true }, { status: 202, headers: CORS });

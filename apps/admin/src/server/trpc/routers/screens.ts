@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, tenantProcedure, adminProcedure } from '../init';
 import { TRPCError } from '@trpc/server';
+import { isPairingCodeExpired } from '@/lib/pairing';
 
 export const screensRouter = router({
   list: tenantProcedure.query(({ ctx }) =>
@@ -72,7 +73,7 @@ export const screensRouter = router({
       if (!pairing || pairing.orgSlug) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid or already-used pairing code' });
       }
-      if (pairing.expiresAt < new Date()) {
+      if (isPairingCodeExpired(pairing)) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Pairing code expired' });
       }
 
