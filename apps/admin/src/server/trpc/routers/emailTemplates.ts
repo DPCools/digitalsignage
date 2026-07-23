@@ -76,8 +76,8 @@ export const emailTemplatesRouter = router({
       bodyHtml: z.string().min(1),
       to: z.string().email(),
     }))
-    .mutation(async ({ ctx, input }) => {
-      const config = await loadSmtpConfig(ctx.db);
+    .mutation(async ({ input }) => {
+      const config = loadSmtpConfig();
       if (!config) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'SMTP is not configured — set it up first.' });
       }

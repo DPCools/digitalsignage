@@ -6,13 +6,19 @@ import {
   type EmailEvent,
 } from './email-events';
 
-// Loads the org's SMTP config from OrgSetting rows. Returns null when SMTP is
-// not configured, so callers can no-op silently.
-export async function loadSmtpConfig(db: TenantPrismaClient): Promise<SmtpConfig | null> {
-  const rows = await db.orgSetting.findMany({ where: { key: { startsWith: 'smtp_' } } });
-  const m: Record<string, string> = {};
-  for (const r of rows) m[r.key] = r.value;
-  return buildSmtpConfig(m);
+// Loads SMTP config from environment variables — one hardcoded server for the
+// whole deployment, no longer per-org/DB-configurable via the settings UI.
+// Returns null when SMTP is not configured, so callers can no-op silently.
+export function loadSmtpConfig(): SmtpConfig | null {
+  return buildSmtpConfig({
+    smtp_host:       process.env.SMTP_HOST ?? '',
+    smtp_port:       process.env.SMTP_PORT ?? '587',
+    smtp_secure:     process.env.SMTP_SECURE ?? 'false',
+    smtp_user:       process.env.SMTP_USER ?? '',
+    smtp_password:   process.env.SMTP_PASSWORD ?? '',
+    smtp_from_email: process.env.SMTP_FROM_EMAIL ?? '',
+    smtp_from_name:  process.env.SMTP_FROM_NAME ?? 'SignFlow',
+  });
 }
 
 // Deduped union of every email address across the given recipient lists. Unknown
@@ -66,7 +72,7 @@ export async function sendEventEmail(
     const tpl = await getTemplateContent(db, event);
     if (!tpl.enabled) return;
 
-    const config = await loadSmtpConfig(db);
+    const config = loadSmtpConfig();
     if (!config) return;
 
     const subject = renderTemplate(tpl.subject, vars, { escape: false });
